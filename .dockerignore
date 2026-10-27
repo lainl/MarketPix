@@ -1,0 +1,5 @@
+.git
+MarketPix/Java/target
+**/*api-key*
+**/.DS_Store
+**/Thumbs.db

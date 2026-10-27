@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #777b5a url("img/LoginBG.png") repeat center center;
+        font-family: Arial, sans-serif;
+      }
+
+      .login-form {
+        display: grid;
+        gap: 16px;
+        width: min(320px, calc(100vw - 40px));
+      }
+
+      .login-form input {
+        width: 100%;
+        min-height: 52px;
+        padding: 0 18px;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 16px;
+        background: #F3E296;
+        color: #313423;
+        font: inherit;
+        font-size: 16px;
+      }
+
+      .login-form input::placeholder {
+        color: #57573e;
+        opacity: 1;
+      }
+
+      .login-form input:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 3px;
+      }
+
+      .login-form button {
+        min-height: 52px;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 16px;
+        background: #F3E296;
+        color: #313423;
+        font: inherit;
+        font-size: 16px;
+        box-shadow: 0 4px 0 rgba(49, 52, 35, 0.28);
+        cursor: pointer;
+        transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+      }
+
+      .login-form button:hover {
+        transform: translateY(-4px);
+        background: #f8e9a8;
+        box-shadow: 0 8px 14px rgba(49, 52, 35, 0.3);
+      }
+
+      .login-form button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+
+      .login-form button:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 3px;
+      }
+
+      .login-error {
+        margin: 0;
+        color: #6b2922;
+        font-size: 14px;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .login-form button {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <form class="login-form" aria-label="Login">
+      <input type="text" name="username" placeholder="username" aria-label="username" autocomplete="username" required>
+      <input type="password" name="password" placeholder="password" aria-label="password" autocomplete="current-password" required>
+      <p class="login-error" id="login-error" role="alert" hidden>Username or password is incorrect.</p>
+      <button type="submit">Login</button>
+    </form>
+    <script src="session.js"></script>
+    <script>
+      const loginForm = document.querySelector(".login-form");
+      const loginError = document.querySelector("#login-error");
+      const loginButton = loginForm.querySelector("button");
+      // Only pages of this app are allowed as the return address.
+      const requestedPage = new URLSearchParams(window.location.search).get("next");
+      const nextPage = sessionPages.includes(requestedPage) ? requestedPage : "Home.html";
+
+      // Someone who is still logged in goes straight on.
+      if (getSessionToken()) {
+        fetch(`${apiBaseUrl}/api/auth/session`, { headers: { Authorization: `Bearer ${getSessionToken()}` } })
+          .then((response) => {
+            if (response.ok) {
+              window.location.replace(nextPage);
+            } else {
+              clearSessionToken();
+            }
+          })
+          .catch(() => {});
+      }
+
+      function showLoginError(message) {
+        loginError.textContent = message;
+        loginError.hidden = false;
+      }
+
+      loginForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const formData = new FormData(loginForm);
+        loginError.hidden = true;
+        loginButton.disabled = true;
+
+        try {
+          const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: formData.get("username"), password: formData.get("password") })
+          });
+          if (response.status === 401) {
+            showLoginError("Username or password is incorrect.");
+            return;
+          }
+          if (!response.ok) {
+            throw new Error(`Login failed (${response.status}).`);
+          }
+          const session = await response.json();
+          setSessionToken(session.token);
+          window.location.replace(nextPage);
+        } catch (error) {
+          showLoginError("MarketPix could not be reached. Check that the server is running and try again.");
+        } finally {
+          loginButton.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

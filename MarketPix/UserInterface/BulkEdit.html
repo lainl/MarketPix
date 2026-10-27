@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bulk edit</title>
+    <link rel="icon" href="data:,">
+    <script src="session.js"></script>
+    <script>requireSession();</script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: flex;
+        min-height: 100vh;
+        min-height: 100dvh;
+        flex-direction: column;
+        gap: 16px;
+        padding: 32px;
+        background: #9B9E76;
+        color: #313423;
+        font-family: Arial, sans-serif;
+      }
+
+      .page-nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: min(1120px, 100%);
+        margin: 0 auto;
+      }
+
+      .page-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid rgba(49, 52, 35, 0.18);
+        border-radius: 14px;
+        background: rgba(243, 226, 150, 0.2);
+      }
+
+      .page-tab,
+      .logout-button {
+        display: inline-flex;
+        min-height: 36px;
+        align-items: center;
+        padding: 0 16px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        background: transparent;
+        color: #313423;
+        font: inherit;
+        font-size: 14px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background-color 160ms ease;
+      }
+
+      .page-tab:hover,
+      .logout-button:hover {
+        background: rgba(243, 226, 150, 0.55);
+      }
+
+      .page-tab[aria-current="page"] {
+        border-color: rgba(49, 52, 35, 0.35);
+        background: #F3E296;
+        font-weight: 600;
+      }
+
+      .page-tab:focus-visible,
+      .logout-button:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 2px;
+      }
+
+      .bulk-workspace {
+        width: min(720px, 100%);
+        margin: 0 auto;
+      }
+
+      .bulk-panel {
+        padding: 28px;
+        border: 1px solid rgba(49, 52, 35, 0.18);
+        border-radius: 20px;
+        background: rgba(243, 226, 150, 0.2);
+      }
+
+      .bulk-panel h1 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 600;
+      }
+
+      .bulk-subtitle {
+        margin: 8px 0 0;
+        color: #57573e;
+        font-size: 15px;
+        line-height: 1.45;
+      }
+
+      .item-controls {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .item-controls input,
+      .item-controls button,
+      .bulk-button {
+        min-height: 48px;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 14px;
+        background: #F3E296;
+        color: #313423;
+        font: inherit;
+        font-size: 15px;
+      }
+
+      .item-controls input {
+        flex: 1;
+        min-width: 0;
+        padding: 0 16px;
+      }
+
+      .item-controls input::placeholder {
+        color: #57573e;
+        opacity: 1;
+      }
+
+      .item-controls button,
+      .bulk-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 22px;
+        box-shadow: 0 3px 0 rgba(49, 52, 35, 0.25);
+        text-decoration: none;
+        cursor: pointer;
+        transition: transform 160ms ease, box-shadow 160ms ease;
+      }
+
+      .item-controls button:hover:not(:disabled),
+      .bulk-button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 10px rgba(49, 52, 35, 0.22);
+      }
+
+      .item-controls input:disabled,
+      .item-controls button:disabled,
+      .bulk-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      .item-controls input:focus-visible,
+      .item-controls button:focus-visible,
+      .bulk-button:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 3px;
+      }
+
+      .bulk-button[hidden] {
+        display: none;
+      }
+
+      .bulk-button.quiet {
+        background: transparent;
+        box-shadow: none;
+      }
+
+      .bulk-message {
+        min-height: 20px;
+        margin: 16px 0 0;
+        color: #57573e;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .bulk-message.error {
+        color: #762f20;
+      }
+
+      .bulk-progress {
+        margin-top: 20px;
+      }
+
+      .bulk-progress[hidden],
+      .bulk-results[hidden] {
+        display: none;
+      }
+
+      .progress-track {
+        height: 28px;
+        overflow: hidden;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 14px;
+        background: rgba(49, 52, 35, 0.12);
+      }
+
+      /* Diagonal white stripes over the input-box color, drifting while photos are processing. */
+      .progress-fill {
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background-color: #F3E296;
+        background-image: linear-gradient(
+          45deg,
+          #ffffff 25%,
+          transparent 25%,
+          transparent 50%,
+          #ffffff 50%,
+          #ffffff 75%,
+          transparent 75%,
+          transparent
+        );
+        background-size: 36px 36px;
+        animation: progress-stripes 1s linear infinite;
+        transition: width 400ms ease;
+      }
+
+      .bulk-progress.is-idle .progress-fill {
+        animation: none;
+      }
+
+      @keyframes progress-stripes {
+        from { background-position: 36px 0; }
+        to { background-position: 0 0; }
+      }
+
+      .progress-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 10px;
+      }
+
+      .progress-count {
+        margin: 0;
+        font-size: 15px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .progress-row .bulk-button {
+        min-height: 36px;
+        padding: 0 16px;
+        font-size: 14px;
+      }
+
+      .bulk-results {
+        display: grid;
+        gap: 14px;
+        margin-top: 20px;
+      }
+
+      .result-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .result-list h2 {
+        margin: 0 0 6px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .result-list ul {
+        max-height: 220px;
+        margin: 0;
+        padding-left: 18px;
+        overflow-y: auto;
+        color: #762f20;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .result-list[hidden] {
+        display: none;
+      }
+
+      .cost-dialog {
+        width: min(420px, calc(100vw - 32px));
+        padding: 24px;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 20px;
+        background: #fff8d5;
+        color: #313423;
+        box-shadow: 0 18px 40px rgba(24, 25, 18, 0.35);
+      }
+
+      .cost-dialog::backdrop {
+        background: rgba(24, 25, 18, 0.6);
+      }
+
+      .cost-dialog h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+      }
+
+      .cost-dialog p {
+        margin: 10px 0 0;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .cost-amount {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border: 1px solid rgba(49, 52, 35, 0.25);
+        border-radius: 14px;
+        background: #F3E296;
+      }
+
+      .cost-dialog .cost-amount {
+        margin-top: 16px;
+      }
+
+      .cost-amount strong {
+        font-size: 24px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .cost-note {
+        color: #57573e;
+      }
+
+      .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      /* The optional background scene, styled like the one on the single-item page. */
+      .slot-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 24px 0 10px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .slot-heading small {
+        color: #57573e;
+        font-size: 12px;
+        font-weight: 400;
+      }
+
+      .background-card {
+        position: relative;
+      }
+
+      .image-picker {
+        position: relative;
+        display: grid;
+        width: 100%;
+        aspect-ratio: 2.4;
+        place-items: center;
+        overflow: hidden;
+        padding: 0;
+        border: 1px dashed rgba(49, 52, 35, 0.5);
+        border-radius: 16px;
+        background: rgba(243, 226, 150, 0.42);
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        appearance: none;
+      }
+
+      .image-picker:disabled {
+        cursor: not-allowed;
+      }
+
+      .image-picker:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 3px;
+      }
+
+      .sketch {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        padding: 10px;
+        opacity: 0.45;
+        transition: opacity 160ms ease;
+      }
+
+      .image-picker.has-upload .sketch {
+        opacity: 1;
+        padding: 0;
+        object-fit: cover;
+        object-position: center;
+      }
+
+      .upload-icon {
+        position: absolute;
+        z-index: 1;
+        width: 36px;
+        height: 36px;
+        padding: 8px;
+        border-radius: 50%;
+        background: rgba(243, 226, 150, 0.92);
+        color: #313423;
+        pointer-events: none;
+      }
+
+      .image-picker.has-upload .upload-icon {
+        opacity: 0;
+      }
+
+      .optional-badge {
+        position: absolute;
+        z-index: 2;
+        top: 8px;
+        right: 8px;
+        max-width: calc(100% - 16px);
+        overflow: hidden;
+        padding: 4px 8px;
+        border-radius: 9px;
+        background: rgba(49, 52, 35, 0.82);
+        color: #fff8d5;
+        font-size: 11px;
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+
+      .image-picker.has-upload .optional-badge {
+        display: none;
+      }
+
+      .image-picker.has-file .optional-badge {
+        top: auto;
+        right: auto;
+        bottom: 8px;
+        left: 8px;
+      }
+
+      .remove-background {
+        position: absolute;
+        z-index: 3;
+        top: 8px;
+        right: 8px;
+        display: grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 50%;
+        background: rgba(243, 226, 150, 0.96);
+        color: #313423;
+        cursor: pointer;
+      }
+
+      .remove-background[hidden] {
+        display: none;
+      }
+
+      .remove-background svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .remove-background:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 2px;
+      }
+
+      .image-file {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        clip-path: inset(50%);
+      }
+
+      .background-section[hidden] {
+        display: none;
+      }
+
+      @media (max-width: 440px) {
+        body {
+          padding: 20px 16px;
+        }
+
+        .bulk-panel {
+          padding: 18px;
+        }
+
+        .item-controls {
+          flex-direction: column;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0.01ms !important;
+        }
+
+        .progress-fill {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="page-nav" aria-label="Pages">
+      <div class="page-tabs">
+        <a class="page-tab" href="Home.html">Single item</a>
+        <a class="page-tab" href="BulkEdit.html" aria-current="page">Bulk edit</a>
+        <a class="page-tab" href="Gallery.html">Gallery</a>
+      </div>
+      <button class="logout-button" type="button" id="logout">Log out</button>
+    </nav>
+    <main class="bulk-workspace">
+      <section class="bulk-panel" aria-labelledby="bulk-title">
+        <h1 id="bulk-title">Bulk edit</h1>
+        <p class="bulk-subtitle">Make sure the drop box folder you are entering is shared with marketpixs@gmail.com</p>
+        <!-- Optional background scene for every photo; shown when backgroundUploadEnabled is true (and
+             marketpix.background.enabled on the server). -->
+        <div class="background-section" id="background-section" hidden>
+          <h2 class="slot-heading">Background <small>Optional — leave empty for a white studio background</small></h2>
+          <div class="background-card">
+            <button class="image-picker" type="button" id="background-picker" aria-label="Upload background scene (optional)">
+              <img class="sketch" id="background-preview" src="img/Background.png" alt="Studio background sketch">
+              <span class="optional-badge" id="background-badge" aria-hidden="true">Optional</span>
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="remove-background" type="button" id="background-remove" aria-label="Remove background scene" title="Remove background" hidden>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <input class="image-file" id="background-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose background scene">
+          </div>
+        </div>
+        <form class="item-controls" id="bulk-form" novalidate>
+          <input type="url" name="dropboxUrl" placeholder="Dropbox folder link" aria-label="Dropbox folder link" autocomplete="off">
+          <button type="submit" id="bulk-start">Start</button>
+        </form>
+        <p class="bulk-message" id="bulk-message" role="status" aria-live="polite"></p>
+
+        <div class="bulk-progress" id="bulk-progress" hidden>
+          <div class="progress-track" id="progress-track" role="progressbar" aria-label="Photos finished"
+               aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <div class="progress-row">
+            <p class="progress-count" id="progress-count">0/0 photos finished</p>
+            <button class="bulk-button quiet" type="button" id="bulk-stop">Stop</button>
+          </div>
+        </div>
+
+        <div class="bulk-results" id="bulk-results" hidden>
+          <div class="result-actions">
+            <a class="bulk-button" id="bulk-download" hidden>Download</a>
+            <button class="bulk-button quiet" type="button" id="bulk-new">Edit another folder</button>
+          </div>
+          <div class="result-list" id="bulk-warnings" hidden>
+            <h2>Check these before listing</h2>
+            <ul></ul>
+          </div>
+          <div class="result-list" id="bulk-failures" hidden>
+            <h2>Not edited</h2>
+            <ul></ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="cost-dialog" id="cost-dialog" aria-labelledby="cost-title">
+      <h2 id="cost-title">Start bulk edit?</h2>
+      <p id="cost-summary"></p>
+      <p class="cost-amount"><span>Approximate cost</span><strong id="cost-amount"></strong></p>
+      <p class="cost-note" id="cost-note"></p>
+      <div class="dialog-actions">
+        <button class="bulk-button quiet" type="button" id="cost-cancel">Cancel</button>
+        <button class="bulk-button" type="button" id="cost-continue">Continue</button>
+      </div>
+    </dialog>
+
+    <script>
+      const bulkForm = document.querySelector("#bulk-form");
+      const dropboxInput = bulkForm.querySelector('input[name="dropboxUrl"]');
+      const startButton = document.querySelector("#bulk-start");
+      const bulkMessage = document.querySelector("#bulk-message");
+      const bulkProgress = document.querySelector("#bulk-progress");
+      const progressTrack = document.querySelector("#progress-track");
+      const progressFill = document.querySelector("#progress-fill");
+      const progressCount = document.querySelector("#progress-count");
+      const stopButton = document.querySelector("#bulk-stop");
+      const bulkResults = document.querySelector("#bulk-results");
+      const downloadLink = document.querySelector("#bulk-download");
+      const newFolderButton = document.querySelector("#bulk-new");
+      const warningList = document.querySelector("#bulk-warnings");
+      const failureList = document.querySelector("#bulk-failures");
+      const costDialog = document.querySelector("#cost-dialog");
+      const costSummary = document.querySelector("#cost-summary");
+      const costAmount = document.querySelector("#cost-amount");
+      const costNote = document.querySelector("#cost-note");
+      const costContinue = document.querySelector("#cost-continue");
+      const costCancel = document.querySelector("#cost-cancel");
+      // The running job is remembered so switching to the single-item page and back picks it up again.
+      const bulkJobKey = "marketpix.bulkJobId";
+      // Optional background scene for every photo; set to false to hide the slot and upload nothing.
+      const backgroundUploadEnabled = true;
+      const backgroundPicker = document.querySelector("#background-picker");
+      const backgroundPreview = document.querySelector("#background-preview");
+      const backgroundBadge = document.querySelector("#background-badge");
+      const backgroundRemove = document.querySelector("#background-remove");
+      const backgroundInput = document.querySelector("#background-file");
+      document.querySelector("#background-section").hidden = !backgroundUploadEnabled;
+      let backgroundFile = null;
+      let backgroundPreviewUrl = null;
+      const runningStatuses = ["PROCESSING", "EXPORTING", "CANCELLING"];
+      const finishedStatuses = ["COMPLETE", "CANCELLED", "FAILED"];
+      const pollInterval = 2000;
+      const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+      let bulkJob = null;
+      let pollTimer = null;
+      let requestPending = false;
+
+      function storedJobId() {
+        try {
+          return localStorage.getItem(bulkJobKey);
+        } catch {
+          return null;
+        }
+      }
+
+      function storeJobId(jobId) {
+        try {
+          if (jobId) {
+            localStorage.setItem(bulkJobKey, jobId);
+          } else {
+            localStorage.removeItem(bulkJobKey);
+          }
+        } catch {
+          // The job then only shows on this visit to the page.
+        }
+      }
+
+      function showMessage(text, isError = false) {
+        bulkMessage.textContent = text || "";
+        bulkMessage.classList.toggle("error", isError);
+      }
+
+      async function bulkRequest(path, options = {}) {
+        const response = await apiFetch(`${apiBaseUrl}/api/bulk/jobs${path}`, options);
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const error = new Error(body.message || `The request failed (${response.status}).`);
+          error.status = response.status;
+          throw error;
+        }
+        return body;
+      }
+
+      function setFormDisabled(disabled) {
+        dropboxInput.disabled = disabled;
+        startButton.disabled = disabled;
+        backgroundPicker.disabled = disabled;
+        backgroundRemove.disabled = disabled;
+      }
+
+      // Shows the chosen background. Formats the browser cannot display (HEIC, TIFF, ...) keep the
+      // sketch and show the file name instead; the server converts them.
+      function showBackground(file) {
+        if (backgroundPreviewUrl) {
+          URL.revokeObjectURL(backgroundPreviewUrl);
+          backgroundPreviewUrl = null;
+        }
+        backgroundFile = file;
+        backgroundPreview.src = "img/Background.png";
+        backgroundPreview.alt = "Studio background sketch";
+        backgroundPicker.classList.remove("has-upload");
+        backgroundPicker.classList.toggle("has-file", Boolean(file));
+        backgroundRemove.hidden = !file;
+        backgroundBadge.textContent = "Optional";
+        backgroundPicker.setAttribute("aria-label", "Upload background scene (optional)");
+        if (!file) {
+          return;
+        }
+        backgroundBadge.textContent = `${file.name} (no preview)`;
+        backgroundPicker.setAttribute("aria-label", `Change background scene ${file.name}`);
+        const url = URL.createObjectURL(file);
+        const candidate = new Image();
+        candidate.onload = () => {
+          if (backgroundFile !== file) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          backgroundPreviewUrl = url;
+          backgroundPreview.src = url;
+          backgroundPreview.alt = file.name;
+          backgroundPicker.classList.add("has-upload");
+        };
+        candidate.onerror = () => URL.revokeObjectURL(url);
+        candidate.src = url;
+      }
+
+      function fillList(container, items) {
+        const list = container.querySelector("ul");
+        list.replaceChildren(...items.map((text) => {
+          const item = document.createElement("li");
+          item.textContent = text;
+          return item;
+        }));
+        container.hidden = items.length === 0;
+      }
+
+      function render(view) {
+        bulkJob = view;
+        const running = runningStatuses.includes(view.status);
+        const finished = finishedStatuses.includes(view.status);
+        const awaiting = view.status === "AWAITING_CONFIRMATION";
+
+        setFormDisabled(running || awaiting || requestPending);
+        startButton.textContent = "Start";
+        // After switching pages the chosen file is gone, but the job still has it.
+        if (!backgroundFile) {
+          backgroundBadge.textContent = view.backgroundScene && !finished ? "Your background is in use" : "Optional";
+        }
+
+        bulkProgress.hidden = !(running || finished);
+        bulkProgress.classList.toggle("is-idle", !running);
+        const percent = view.total > 0 ? Math.round((view.finished / view.total) * 100) : 0;
+        progressFill.style.width = `${percent}%`;
+        progressTrack.setAttribute("aria-valuemax", String(view.total));
+        progressTrack.setAttribute("aria-valuenow", String(view.finished));
+        progressCount.textContent = `${view.finished}/${view.total} photos finished`;
+        stopButton.hidden = !running;
+        stopButton.disabled = view.status !== "PROCESSING";
+        stopButton.textContent = view.status === "CANCELLING" ? "Stopping…" : "Stop";
+
+        if (awaiting) {
+          showMessage("");
+          openCostDialog(view);
+        } else {
+          showMessage(view.message, view.status === "FAILED");
+        }
+
+        bulkResults.hidden = !finished;
+        if (finished) {
+          downloadLink.hidden = !view.downloadUrl;
+          if (view.downloadUrl) {
+            downloadLink.href = withSessionToken(view.downloadUrl);
+            downloadLink.setAttribute("download", view.downloadFilename);
+            downloadLink.textContent = `Download ${view.downloadFilename}`;
+          }
+          fillList(warningList, view.warnings || []);
+          fillList(failureList, view.failures || []);
+        }
+
+        clearTimeout(pollTimer);
+        if (running) {
+          pollTimer = setTimeout(poll, pollInterval);
+        }
+      }
+
+      function resetPage(message = "", isError = false) {
+        clearTimeout(pollTimer);
+        bulkJob = null;
+        storeJobId(null);
+        bulkProgress.hidden = true;
+        bulkResults.hidden = true;
+        setFormDisabled(false);
+        startButton.textContent = "Start";
+        showMessage(message, isError);
+      }
+
+      function openCostDialog(view) {
+        const perPhoto = currency.format(view.costPerPhoto);
+        const perItem = currency.format(view.costPerItem);
+        costSummary.textContent = view.message;
+        costAmount.textContent = `≈ ${currency.format(view.estimatedCost)}`;
+        costNote.textContent = `About ${perPhoto} per photo, plus ${perItem} per item to identify it. `
+          + `Each photo is placed ${view.backgroundScene ? "into your background scene" : "on a white studio background"} `
+          + "and checked against the original; a photo that fails the check is redone once, which can add to the cost.";
+        costContinue.disabled = false;
+        costCancel.disabled = false;
+        if (!costDialog.open) {
+          costDialog.showModal();
+          costContinue.focus();
+        }
+      }
+
+      async function poll() {
+        const jobId = bulkJob && bulkJob.jobId;
+        if (!jobId) {
+          return;
+        }
+        try {
+          render(await bulkRequest(`/${jobId}`));
+        } catch (error) {
+          if (error.status === 404) {
+            resetPage("That bulk job has expired. Start the folder again to edit it.", true);
+            return;
+          }
+          // A dropped connection is retried; the job keeps running on the server.
+          showMessage(`${error.message} Retrying…`, true);
+          pollTimer = setTimeout(poll, pollInterval * 2);
+        }
+      }
+
+      async function createJob(dropboxUrl) {
+        requestPending = true;
+        setFormDisabled(true);
+        startButton.textContent = "Checking folder…";
+        showMessage("Looking for photos in the Dropbox folder…");
+        const formData = new FormData();
+        formData.append("dropboxUrl", dropboxUrl);
+        if (backgroundUploadEnabled && backgroundFile) {
+          formData.append("background", backgroundFile, backgroundFile.name);
+        }
+        try {
+          const view = await bulkRequest("", { method: "POST", body: formData });
+          storeJobId(view.jobId);
+          requestPending = false;
+          render(view);
+        } catch (error) {
+          requestPending = false;
+          resetPage(error.message, true);
+          dropboxInput.focus();
+        }
+      }
+
+      bulkForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const dropboxUrl = dropboxInput.value.trim();
+        if (!/^https:\/\/([a-z0-9-]+\.)*dropbox\.com\//i.test(dropboxUrl)) {
+          showMessage("Enter a Dropbox folder link, such as https://www.dropbox.com/scl/fo/…", true);
+          dropboxInput.focus();
+          return;
+        }
+        createJob(dropboxUrl);
+      });
+
+      costContinue.addEventListener("click", async () => {
+        costContinue.disabled = true;
+        costCancel.disabled = true;
+        try {
+          const view = await bulkRequest(`/${bulkJob.jobId}/start`, { method: "POST" });
+          costDialog.close("started");
+          render(view);
+        } catch (error) {
+          costDialog.close("failed");
+          resetPage(error.message, true);
+        }
+      });
+
+      async function cancelBeforeStart() {
+        const jobId = bulkJob && bulkJob.jobId;
+        if (costDialog.open) {
+          costDialog.close("cancelled");
+        }
+        resetPage("Cancelled. Nothing was edited.");
+        if (jobId) {
+          try {
+            await bulkRequest(`/${jobId}/cancel`, { method: "POST" });
+          } catch {
+            // An unconfirmed job expires on its own.
+          }
+        }
+        dropboxInput.focus();
+      }
+
+      costCancel.addEventListener("click", cancelBeforeStart);
+      // Escape closes the dialog; treat it as Cancel so the job never starts unconfirmed.
+      costDialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        if (!costCancel.disabled) {
+          cancelBeforeStart();
+        }
+      });
+
+      stopButton.addEventListener("click", async () => {
+        if (!bulkJob || !window.confirm("Stop after the photos in progress finish? Finished photos stay downloadable.")) {
+          return;
+        }
+        stopButton.disabled = true;
+        try {
+          render(await bulkRequest(`/${bulkJob.jobId}/cancel`, { method: "POST" }));
+        } catch (error) {
+          stopButton.disabled = false;
+          showMessage(error.message, true);
+        }
+      });
+
+      newFolderButton.addEventListener("click", () => {
+        resetPage();
+        dropboxInput.value = "";
+        dropboxInput.focus();
+      });
+
+      backgroundPicker.addEventListener("click", () => {
+        backgroundInput.value = "";
+        backgroundInput.click();
+      });
+
+      backgroundInput.addEventListener("change", () => {
+        const file = backgroundInput.files && backgroundInput.files[0];
+        if (!file) {
+          return;
+        }
+        if (!file.type.startsWith("image/") && !/\.(hei[cf]|hif|avif|tiff?|psd|jfif|webp|bmp)$/i.test(file.name)) {
+          showMessage(`${file.name} is not an image. Choose a photo of the background scene.`, true);
+          return;
+        }
+        showMessage("");
+        showBackground(file);
+      });
+
+      backgroundRemove.addEventListener("click", () => {
+        showBackground(null);
+        backgroundPicker.focus();
+      });
+
+      document.querySelector("#logout").addEventListener("click", logout);
+
+      // Picks up a job started earlier, whether it is waiting for confirmation, running or finished.
+      const resumeJobId = storedJobId();
+      if (resumeJobId && getSessionToken()) {
+        bulkJob = { jobId: resumeJobId };
+        setFormDisabled(true);
+        showMessage("Loading your bulk job…");
+        poll();
+      }
+    </script>
+  </body>
+</html>

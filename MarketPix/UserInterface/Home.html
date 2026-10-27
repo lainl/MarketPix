@@ -1,0 +1,2073 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Home</title>
+    <link rel="icon" href="data:,">
+    <script src="session.js"></script>
+    <script>requireSession();</script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        min-height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body {
+        display: flex;
+        height: 100vh;
+        height: 100dvh;
+        min-height: 100vh;
+        flex-direction: column;
+        gap: 16px;
+        padding: 32px;
+        background: #9B9E76;
+        color: #313423;
+        font-family: Arial, sans-serif;
+      }
+
+      .page-nav {
+        display: flex;
+        flex: 0 0 auto;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: min(1120px, 100%);
+        margin: 0 auto;
+      }
+
+      .page-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid rgba(49, 52, 35, 0.18);
+        border-radius: 14px;
+        background: rgba(243, 226, 150, 0.2);
+      }
+
+      .page-tab,
+      .logout-button {
+        display: inline-flex;
+        min-height: 36px;
+        align-items: center;
+        padding: 0 16px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        background: transparent;
+        color: #313423;
+        font: inherit;
+        font-size: 14px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background-color 160ms ease;
+      }
+
+      .page-tab:hover,
+      .logout-button:hover {
+        background: rgba(243, 226, 150, 0.55);
+      }
+
+      .page-tab[aria-current="page"] {
+        border-color: rgba(49, 52, 35, 0.35);
+        background: #F3E296;
+        font-weight: 600;
+      }
+
+      .page-tab:focus-visible,
+      .logout-button:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 2px;
+      }
+
+      .workspace {
+        display: grid;
+        flex: 1 1 auto;
+        grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+        grid-template-rows: minmax(0, 1fr);
+        gap: 24px;
+        width: min(1120px, 100%);
+        min-height: 0;
+        margin: 0 auto;
+      }
+
+      .upload-panel,
+      .chat-panel {
+        min-height: 0;
+        padding: 24px;
+        border: 1px solid rgba(49, 52, 35, 0.18);
+        border-radius: 20px;
+        background: rgba(243, 226, 150, 0.2);
+      }
+
+      .upload-panel {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      .upload-panel::-webkit-scrollbar,
+      .chat-messages::-webkit-scrollbar {
+        display: none;
+      }
+
+      .angle-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .angle-card {
+        position: relative;
+        min-width: 0;
+        text-align: center;
+      }
+
+      .slot-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 0 0 10px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .slot-heading small {
+        color: #57573e;
+        font-size: 12px;
+        font-weight: 400;
+      }
+
+      .slot-heading + .angle-grid {
+        margin-top: 0;
+      }
+
+      .result-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .result-thumb {
+        position: relative;
+        display: block;
+        width: 100%;
+        aspect-ratio: 1.5;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid rgba(49, 52, 35, 0.25);
+        border-radius: 10px;
+        background: #fff8d5;
+        cursor: zoom-in;
+      }
+
+      .result-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .result-thumb.flagged {
+        border: 2px solid #762f20;
+      }
+
+      .result-thumb span {
+        position: absolute;
+        bottom: 4px;
+        left: 4px;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: rgba(49, 52, 35, 0.82);
+        color: #fff8d5;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .result-thumb:focus-visible {
+        outline: 3px solid #57573e;
+        outline-offset: 2px;
+      }
+
+      .result-warnings {
+        margin: 10px 0 0;
+        padding-left: 18px;
+        color: #762f20;
+      }
+
+      .background-card {
+        position: relative;
+        min-width: 0;
+        margin-bottom: 22px;
+        text-align: center;
+      }
+
+      .background-card .image-picker {
+        aspect-ratio: 2.4;
+      }
+
+      .optional-badge {
+        position: absolute;
+        z-index: 2;
+        top: 8px;
+        right: 8px;
+        padding: 4px 8px;
+        border-radius: 9px;
+        background: rgba(49, 52, 35, 0.82);
+        color: #fff8d5;
+        font-size: 11px;
+        font-weight: 700;
+        pointer-events: none;
+      }
+
+      .image-picker.has-upload .optional-badge {
+        display: none;
+      }
+
+      .angle-card.extra-angle {
+        padding-top: 0;
+      }
+
+      .image-picker,
+      .add-angle {
+        position: relative;
+        display: grid;
+        width: 100%;
+        aspect-ratio: 1.35;
+        place-items: center;
+        overflow: hidden;
+        border: 1px dashed rgba(49, 52, 35, 0.5);
+        border-radius: 16px;
+        background: rgba(243, 226, 150, 0.42);
+        cursor: pointer;
+      }
+
+      .image-picker {
+        padding: 0;
+        color: inherit;
+        font: inherit;
+        appearance: none;
+      }
+
+      .image-picker:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 3px;
+      }
+
+      .image-file {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        clip-path: inset(50%);
+      }
+
+      .image-picker:focus-within,
+      .add-angle:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 3px;
+      }
+
+      .sketch {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        padding: 10px;
+        opacity: 0.45;
+        transition: opacity 160ms ease;
+      }
+
+      .image-picker.has-upload .sketch {
+        opacity: 1;
+        padding: 0;
+        object-fit: cover;
+        object-position: center;
+      }
+
+      .image-picker.has-upload .upload-icon {
+        opacity: 0;
+      }
+
+      .image-number {
+        position: absolute;
+        z-index: 2;
+        top: 8px;
+        left: 8px;
+        display: grid;
+        min-width: 30px;
+        height: 26px;
+        place-items: center;
+        padding: 0 7px;
+        border: 1px solid rgba(255, 248, 213, 0.8);
+        border-radius: 9px;
+        background: rgba(49, 52, 35, 0.82);
+        color: #fff8d5;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        pointer-events: none;
+      }
+
+      .image-number[hidden] {
+        display: none;
+      }
+
+      .remove-extra {
+        position: absolute;
+        z-index: 3;
+        top: 8px;
+        right: 8px;
+        display: grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 50%;
+        background: rgba(243, 226, 150, 0.96);
+        color: #313423;
+        cursor: pointer;
+        opacity: 0;
+        visibility: visible;
+        pointer-events: none;
+        transition: opacity 140ms ease, visibility 140ms ease;
+      }
+
+      .remove-extra svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .extra-angle:hover .remove-extra,
+      .remove-extra:focus-visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .remove-extra:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 2px;
+      }
+
+      .image-menu {
+        position: absolute;
+        z-index: 2;
+        top: 8px;
+        left: 8px;
+        display: grid;
+        min-width: 150px;
+        gap: 4px;
+        padding: 6px;
+        border: 1px solid rgba(49, 52, 35, 0.28);
+        border-radius: 12px;
+        background: #F3E296;
+        box-shadow: 0 8px 24px rgba(49, 52, 35, 0.24);
+        text-align: left;
+      }
+
+      .image-menu[hidden] {
+        display: none;
+      }
+
+      .image-menu button,
+      .lightbox-button {
+        min-height: 40px;
+        padding: 8px 12px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: #313423;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .image-menu button:hover,
+      .lightbox-button:hover {
+        background: rgba(49, 52, 35, 0.12);
+      }
+
+      .image-menu button:focus-visible,
+      .lightbox-button:focus-visible {
+        outline: 3px solid #57573e;
+        outline-offset: 1px;
+      }
+
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        clip-path: inset(50%);
+        border: 0;
+      }
+
+      .image-lightbox {
+        position: fixed;
+        z-index: 10;
+        inset: 0;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 20px;
+        background: rgba(24, 25, 18, 0.9);
+      }
+
+      .image-lightbox[hidden] {
+        display: none;
+      }
+
+      .lightbox-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .lightbox-button {
+        min-width: 44px;
+        background: #F3E296;
+        text-align: center;
+      }
+
+      .lightbox-viewport {
+        display: flex;
+        min-width: 0;
+        min-height: 0;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border-radius: 16px;
+        touch-action: none;
+        cursor: zoom-in;
+      }
+
+      .lightbox-viewport.is-zoomed {
+        cursor: grab;
+      }
+
+      .lightbox-viewport.is-panning {
+        cursor: grabbing;
+      }
+
+      .lightbox-image {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 12px;
+        object-fit: contain;
+        transform-origin: center;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+
+      .lightbox-caption {
+        min-height: 20px;
+        color: #fff8d5;
+        font-size: 14px;
+        text-align: center;
+      }
+
+      .upload-icon {
+        position: absolute;
+        z-index: 1;
+        width: 36px;
+        height: 36px;
+        padding: 8px;
+        border-radius: 50%;
+        background: rgba(243, 226, 150, 0.92);
+        color: #313423;
+        pointer-events: none;
+      }
+
+      .angle-name {
+        display: block;
+        margin-top: 10px;
+        font-size: 14px;
+      }
+
+      .add-angle {
+        align-content: center;
+        gap: 8px;
+        border-style: dashed;
+        background: rgba(243, 226, 150, 0.28);
+        color: #313423;
+        font: inherit;
+        transition: background-color 160ms ease, transform 160ms ease;
+      }
+
+      .add-angle:hover {
+        transform: translateY(-2px);
+        background: rgba(243, 226, 150, 0.55);
+      }
+
+      .add-angle svg {
+        width: 28px;
+        height: 28px;
+      }
+
+      .item-controls {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .item-controls input,
+      .item-controls button {
+        min-height: 48px;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 14px;
+        background: #F3E296;
+        color: #313423;
+        font: inherit;
+        font-size: 15px;
+      }
+
+      .item-controls input {
+        flex: 1;
+        min-width: 0;
+        padding: 0 16px;
+      }
+
+      .item-controls input::placeholder {
+        color: #57573e;
+        opacity: 1;
+      }
+
+      .item-controls button {
+        padding: 0 22px;
+        box-shadow: 0 3px 0 rgba(49, 52, 35, 0.25);
+        cursor: pointer;
+        transition: transform 160ms ease, box-shadow 160ms ease;
+      }
+
+      .item-controls button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 10px rgba(49, 52, 35, 0.22);
+      }
+
+      .item-controls input:focus-visible,
+      .item-controls button:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 3px;
+      }
+
+      .chat-panel {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .chat-panel h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+      }
+
+      .chat-space {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        margin: 18px 0;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: stretch;
+        padding: 20px;
+        border: 1px dashed rgba(49, 52, 35, 0.28);
+        border-radius: 16px;
+        color: #57573e;
+        font-size: 14px;
+        overflow: hidden;
+      }
+
+      .chat-empty-state {
+        display: grid;
+        width: 100%;
+        margin: auto;
+        justify-items: center;
+        gap: 12px;
+      }
+
+      .chat-empty-state[hidden] {
+        display: none;
+      }
+
+      .chat-empty-state h2 {
+        margin: 0 0 2px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .chat-suggestions {
+        display: grid;
+        width: min(100%, 320px);
+        gap: 8px;
+      }
+
+      .chat-suggestion {
+        padding: 9px 12px;
+        border: 1px solid rgba(49, 52, 35, 0.2);
+        border-radius: 12px;
+        background: rgba(243, 226, 150, 0.48);
+        color: #57573e;
+        font: inherit;
+        font-size: 13px;
+        line-height: 1.4;
+        text-align: left;
+        cursor: pointer;
+        transition: background-color 160ms ease, border-color 160ms ease;
+      }
+
+      .chat-suggestion:hover {
+        border-color: rgba(49, 52, 35, 0.4);
+        background: rgba(243, 226, 150, 0.78);
+      }
+
+      .chat-suggestion:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 2px;
+      }
+
+      .chat-messages {
+        display: flex;
+        flex: 1;
+        width: 100%;
+        min-height: 0;
+        align-self: stretch;
+        flex-direction: column;
+        gap: 12px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      .chat-message {
+        flex: 0 0 auto;
+        max-width: 88%;
+        padding: 10px 14px;
+        border-radius: 14px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+
+      .chat-message.user {
+        align-self: flex-end;
+        background: #F3E296;
+        color: #313423;
+      }
+
+      .chat-message.assistant {
+        align-self: flex-start;
+        background: rgba(243, 226, 150, 0.45);
+        color: #313423;
+      }
+
+      .chat-message.error {
+        color: #762f20;
+      }
+
+      .thinking-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #57573e;
+      }
+
+      .thinking-dots {
+        display: inline-flex;
+        gap: 3px;
+      }
+
+      .thinking-dots span {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: currentColor;
+        animation: thinking-pulse 1s infinite ease-in-out;
+      }
+
+      .thinking-dots span:nth-child(2) {
+        animation-delay: 120ms;
+      }
+
+      .thinking-dots span:nth-child(3) {
+        animation-delay: 240ms;
+      }
+
+      @keyframes thinking-pulse {
+        0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+        30% { opacity: 1; transform: translateY(-3px); }
+      }
+
+      .chat-compose {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+      }
+
+      .chat-input {
+        width: 100%;
+        min-height: 48px;
+        padding: 12px 16px;
+        resize: vertical;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 14px;
+        background: #F3E296;
+        color: #313423;
+        font: inherit;
+      }
+
+      .chat-send {
+        min-height: 48px;
+        padding: 0 18px;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 14px;
+        background: #F3E296;
+        color: #313423;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .chat-send:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+
+      .chat-input::placeholder {
+        color: #57573e;
+        opacity: 1;
+      }
+
+      .chat-input:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 3px;
+      }
+
+      @media (max-width: 760px) {
+        html,
+        body {
+          height: auto;
+          overflow-y: auto;
+        }
+
+        body {
+          min-height: 100vh;
+          min-height: 100dvh;
+          padding: 20px;
+        }
+
+        .workspace {
+          height: auto;
+          grid-template-columns: 1fr;
+          grid-template-rows: auto;
+        }
+
+        .upload-panel {
+          height: min(70vh, 560px);
+          height: min(70dvh, 560px);
+        }
+
+        .chat-panel {
+          height: min(70vh, 560px);
+          height: min(70dvh, 560px);
+          min-height: 320px;
+        }
+      }
+
+      @media (max-width: 440px) {
+        .upload-panel,
+        .chat-panel {
+          padding: 16px;
+        }
+
+        .angle-grid {
+          gap: 14px;
+        }
+
+        .item-controls {
+          flex-direction: column;
+        }
+
+        .image-lightbox {
+          gap: 8px;
+          padding: 10px;
+        }
+      }
+
+      @media (hover: none) {
+        .remove-extra {
+          opacity: 1;
+          visibility: visible;
+          pointer-events: auto;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+
+        .thinking-dots span {
+          animation: none;
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="page-nav" aria-label="Pages">
+      <div class="page-tabs">
+        <a class="page-tab" href="Home.html" aria-current="page">Single item</a>
+        <a class="page-tab" href="BulkEdit.html">Bulk edit</a>
+        <a class="page-tab" href="Gallery.html">Gallery</a>
+      </div>
+      <button class="logout-button" type="button" id="logout">Log out</button>
+    </nav>
+    <main class="workspace">
+      <section class="upload-panel" aria-label="Item images">
+        <!-- Optional background scene; shown when backgroundUploadEnabled is true (and
+             marketpix.background.enabled on the server). -->
+        <div id="background-section" hidden>
+        <h2 class="slot-heading">Background <small>Optional — leave empty for a white studio background</small></h2>
+        <div class="background-card" id="background-card">
+          <button class="image-picker" type="button" aria-label="Upload background scene (optional)" aria-haspopup="menu" aria-expanded="false">
+            <img class="sketch" src="img/Background.png" alt="Studio background sketch">
+            <span class="optional-badge" aria-hidden="true">Optional</span>
+            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <input class="image-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose background scene">
+        </div>
+        </div>
+        <h2 class="slot-heading">Angles <small>At least one picture required</small></h2>
+        <div class="angle-grid" id="angle-grid">
+          <div class="angle-card">
+            <button class="image-picker" type="button" aria-label="Upload left quarter view" aria-haspopup="menu" aria-expanded="false">
+              <img class="sketch" src="img/Left_Quarter_View.png" alt="Left quarter view sketch">
+              <span class="image-number" aria-hidden="true" hidden></span>
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <input class="image-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose left quarter view image">
+            <span class="angle-name">Left Quarter View</span>
+          </div>
+          <div class="angle-card">
+            <button class="image-picker" type="button" aria-label="Upload right quarter view" aria-haspopup="menu" aria-expanded="false">
+              <img class="sketch" src="img/Right_Quarter_View.png" alt="Right quarter view sketch">
+              <span class="image-number" aria-hidden="true" hidden></span>
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <input class="image-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose right quarter view image">
+            <span class="angle-name">Right Quarter View</span>
+          </div>
+          <div class="angle-card">
+            <button class="image-picker" type="button" aria-label="Upload front view" aria-haspopup="menu" aria-expanded="false">
+              <img class="sketch" src="img/Front.png" alt="Front view sketch">
+              <span class="image-number" aria-hidden="true" hidden></span>
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <input class="image-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose front view image">
+            <span class="angle-name">Front</span>
+          </div>
+          <div class="angle-card">
+            <button class="image-picker" type="button" aria-label="Upload side flat view" aria-haspopup="menu" aria-expanded="false">
+              <img class="sketch" src="img/Side_Flat.png" alt="Side flat sketch">
+              <span class="image-number" aria-hidden="true" hidden></span>
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <input class="image-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose side flat image">
+            <span class="angle-name">Side Flat</span>
+          </div>
+          <button class="add-angle" type="button" id="add-angle" aria-label="Add extra angle">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <span>Extra angle</span>
+          </button>
+        </div>
+        <input class="image-file" id="extra-angle-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose an extra angle image">
+        <p class="visually-hidden" id="image-upload-status" role="status" aria-live="polite"></p>
+        <div class="item-controls">
+          <button type="button" id="process-images">Process</button>
+        </div>
+      </section>
+
+      <section class="chat-panel" aria-label="Chat">
+        <h1>Chat</h1>
+        <div class="chat-space" aria-live="polite" aria-busy="false">
+          <div class="chat-empty-state" id="chat-empty-state">
+            <h2>Add at least one angle (and optionally a background), then click Process. Try asking...</h2>
+            <div class="chat-suggestions">
+              <button class="chat-suggestion" type="button">The item is the brass clock, not the box behind it.</button>
+              <button class="chat-suggestion" type="button">Extra Angle 1 shows the underside with the maker's mark.</button>
+              <button class="chat-suggestion" type="button">How should I photograph glass or shiny items?</button>
+            </div>
+          </div>
+          <div class="chat-messages" id="chat-messages"></div>
+        </div>
+        <form class="chat-compose" id="chat-form">
+          <textarea class="chat-input" placeholder="Write a message..." aria-label="Write a message" rows="2"></textarea>
+          <button class="chat-send" type="submit">Send</button>
+        </form>
+      </section>
+    </main>
+    <div class="image-lightbox" id="image-lightbox" role="dialog" aria-modal="true" aria-label="Image preview" hidden>
+      <div class="lightbox-toolbar">
+        <button class="lightbox-button" type="button" id="zoom-out" aria-label="Zoom out">−</button>
+        <button class="lightbox-button" type="button" id="zoom-reset" aria-label="Reset zoom">Reset</button>
+        <button class="lightbox-button" type="button" id="zoom-in" aria-label="Zoom in">+</button>
+        <button class="lightbox-button" type="button" id="close-lightbox" aria-label="Close image preview">Close</button>
+      </div>
+      <div class="lightbox-viewport" id="lightbox-viewport">
+        <img class="lightbox-image" id="lightbox-image" alt="" draggable="false">
+      </div>
+      <div class="lightbox-caption" id="lightbox-caption"></div>
+    </div>
+    <script>
+      const angleGrid = document.querySelector("#angle-grid");
+      const addAngleButton = document.querySelector("#add-angle");
+      const chatInput = document.querySelector(".chat-input");
+      const chatEmptyState = document.querySelector("#chat-empty-state");
+      const chatMessages = document.querySelector("#chat-messages");
+      const chatForm = document.querySelector("#chat-form");
+      const chatSend = document.querySelector(".chat-send");
+      const chatSpace = document.querySelector(".chat-space");
+      const extraAngleInput = document.querySelector("#extra-angle-file");
+      const processImagesButton = document.querySelector("#process-images");
+      // Optional background scene; set to false to hide the slot and upload nothing.
+      const backgroundUploadEnabled = true;
+      const backgroundCard = document.querySelector("#background-card");
+      document.querySelector("#background-section").hidden = !backgroundUploadEnabled;
+      const conversation = [];
+      const imageLightbox = document.querySelector("#image-lightbox");
+      const lightboxImage = document.querySelector("#lightbox-image");
+      const lightboxViewport = document.querySelector("#lightbox-viewport");
+      const lightboxCaption = document.querySelector("#lightbox-caption");
+      const uploadStatus = document.querySelector("#image-upload-status");
+      const activePreviewUrls = new Set();
+      const extraAngleSlots = [];
+      const currentImageFiles = new WeakMap();
+      let chatPending = false;
+      let chatFollowing = true;
+      let imageJobId = null;
+      let imageJobWaiting = false;
+      let imageJobStreamActive = false;
+      let imageJobProcessing = false;
+      let imageJobContextMessages = [];
+      // Id of a saved image set that is waiting for the user to describe the object so it can be tagged.
+      let pendingTagId = null;
+      let imageJobProgressMessage = null;
+      let imageRevision = 0;
+      let imageJobRevision = 0;
+      let openImageMenu = null;
+      let lightboxTrigger = null;
+      let lightboxZoom = 1;
+      let lightboxPanX = 0;
+      let lightboxPanY = 0;
+      let panStart = null;
+      let lightboxFitWidth = 0;
+      let lightboxFitHeight = 0;
+
+      document.querySelectorAll(".chat-suggestion").forEach((suggestion) => {
+        suggestion.addEventListener("click", () => {
+          chatInput.value = suggestion.textContent;
+          chatInput.focus();
+        });
+      });
+
+      const chatStateObserver = new MutationObserver(() => {
+        chatEmptyState.hidden = chatMessages.childElementCount > 0 || chatMessages.textContent.trim() !== "";
+      });
+
+      chatStateObserver.observe(chatMessages, { childList: true, characterData: true, subtree: true });
+
+      function createChatMessage(role) {
+        const message = document.createElement("div");
+        message.className = `chat-message ${role}`;
+        chatMessages.append(message);
+        scrollChatIfFollowing();
+        return message;
+      }
+
+      function isChatNearBottom() {
+        return chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight <= 48;
+      }
+
+      function scrollChatIfFollowing() {
+        if (chatFollowing) {
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+      }
+
+      chatMessages.addEventListener("scroll", () => {
+        chatFollowing = isChatNearBottom();
+      });
+
+      function showThinking(message, labelText = "MarketPix is thinking") {
+        const indicator = document.createElement("span");
+        indicator.className = "thinking-indicator";
+        indicator.append(document.createTextNode(labelText));
+
+        const dots = document.createElement("span");
+        dots.className = "thinking-dots";
+        dots.setAttribute("aria-hidden", "true");
+        for (let index = 0; index < 3; index += 1) {
+          dots.append(document.createElement("span"));
+        }
+
+        indicator.append(dots);
+        message.append(indicator);
+      }
+
+      // The server turns the user's description into a tag array and saves it with the stored images.
+      async function saveTags(content) {
+        createChatMessage("user").textContent = content;
+        if (/^(?:skip|no|none|no thanks|nope)[.! ]*$/i.test(content)) {
+          pendingTagId = null;
+          appendJobMessage("No problem, the pictures are saved without tags.");
+          scrollChatIfFollowing();
+          return;
+        }
+
+        chatPending = true;
+        chatSend.disabled = true;
+        chatInput.disabled = true;
+        chatSpace.setAttribute("aria-busy", "true");
+        const reply = appendJobMessage("");
+        showThinking(reply, "Saving tags");
+        scrollChatIfFollowing();
+        try {
+          const response = await apiFetch(`${apiBaseUrl}/api/images/records/${pendingTagId}/tags`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ description: content })
+          });
+          if (!response.ok) {
+            throw new Error((await response.text()) || `Request failed (${response.status})`);
+          }
+          const saved = await response.json();
+          pendingTagId = null;
+          reply.textContent = saved.tags.length > 0
+            ? `Saved these tags with ${saved.id}: ${saved.tags.join(", ")}.`
+            : "I couldn't find any tags in that. Describe the object again, or say “skip”.";
+          if (saved.tags.length === 0) {
+            pendingTagId = saved.id;
+          }
+        } catch (error) {
+          reply.textContent = error.message || "Could not save the tags. Please try again.";
+          reply.classList.add("error");
+        } finally {
+          chatPending = false;
+          chatSend.disabled = imageJobProcessing;
+          chatInput.disabled = imageJobProcessing;
+          chatSpace.setAttribute("aria-busy", String(imageJobProcessing));
+          if (!imageJobProcessing) {
+            chatInput.focus();
+          }
+          scrollChatIfFollowing();
+        }
+      }
+
+      async function sendMessage(messageText) {
+        const content = messageText.trim();
+        if (!content || chatPending || imageJobProcessing) {
+          return;
+        }
+
+        if (pendingTagId && !imageJobWaiting) {
+          await saveTags(content);
+          return;
+        }
+
+        const isReadyConfirmation = /^(?:i['’]?m ready|i am ready|ready)[.! ]*$/i.test(content);
+        if (imageJobWaiting && isReadyConfirmation && imageJobId
+                && imageJobRevision === imageRevision) {
+          createChatMessage("user").textContent = content;
+          conversation.push({ role: "user", content });
+          if (conversation.length > 40) {
+            conversation.splice(0, conversation.length - 40);
+          }
+          const context = imageJobContextMessages.join("\n");
+          imageJobWaiting = false;
+          await streamImageJob(`${apiBaseUrl}/api/images/jobs/${imageJobId}/confirm`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ready: true, context })
+          });
+          return;
+        }
+
+        if (imageJobWaiting && isReadyConfirmation) {
+          createChatMessage("user").textContent = content;
+          conversation.push({ role: "user", content });
+          imageJobId = null;
+          appendJobMessage("The images changed after analysis. Click Process to analyze the current images, then say “I'm ready” when the new review is complete.");
+          scrollChatIfFollowing();
+          return;
+        }
+
+        if (imageJobWaiting) {
+          imageJobContextMessages.push(content);
+        }
+
+        chatPending = true;
+        chatSend.disabled = true;
+        chatSpace.setAttribute("aria-busy", "true");
+        chatInput.disabled = true;
+
+        createChatMessage("user").textContent = content;
+        conversation.push({ role: "user", content });
+        if (conversation.length > 40) {
+          conversation.splice(0, conversation.length - 40);
+        }
+        const assistantMessage = createChatMessage("assistant");
+        showThinking(assistantMessage);
+        scrollChatIfFollowing();
+
+        try {
+          const response = await apiFetch(`${apiBaseUrl}/api/chat/stream`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: conversation })
+          });
+          if (!response.ok) {
+            const detail = await response.text();
+            throw new Error(detail || `Request failed (${response.status})`);
+          }
+          if (!response.body) {
+            throw new Error("This browser does not support streaming responses.");
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffered = "";
+          let assistantText = "";
+          let hasStarted = false;
+
+          function processFrame(frame) {
+            let eventType = "message";
+            const dataLines = [];
+            frame.split(/\r?\n/).forEach((line) => {
+              if (line.startsWith("event:")) {
+                eventType = line.slice(6).trim();
+              } else if (line.startsWith("data:")) {
+                dataLines.push(line.slice(5));
+              }
+            });
+
+            if (eventType === "error") {
+              throw new Error(dataLines.join("\n") || "Chat response failed.");
+            }
+            if (dataLines.length > 0) {
+              if (!hasStarted) {
+                assistantMessage.replaceChildren();
+                hasStarted = true;
+              }
+              const token = dataLines.join("\n");
+              assistantText += token;
+              assistantMessage.append(document.createTextNode(token));
+              scrollChatIfFollowing();
+            }
+          }
+
+          while (true) {
+            const { value, done } = await reader.read();
+            buffered += decoder.decode(value || new Uint8Array(), { stream: !done });
+            const frames = buffered.split(/\r?\n\r?\n/);
+            buffered = frames.pop();
+            frames.forEach(processFrame);
+            if (done) {
+              break;
+            }
+          }
+          if (buffered.trim()) {
+            processFrame(buffered);
+          }
+          if (!assistantText) {
+            assistantMessage.textContent = "MarketPix couldn't generate a response.";
+            assistantMessage.classList.add("error");
+          } else {
+            conversation.push({ role: "model", content: assistantText });
+          }
+        } catch (error) {
+          if (conversation.at(-1)?.role === "user") {
+            conversation.pop();
+          }
+          assistantMessage.replaceChildren();
+          assistantMessage.textContent = error.message || "Unable to reach MarketPix. Please try again.";
+          assistantMessage.classList.add("error");
+        } finally {
+          chatPending = false;
+          chatSend.disabled = imageJobProcessing;
+          chatInput.disabled = imageJobProcessing;
+          chatSpace.setAttribute("aria-busy", String(imageJobProcessing));
+          if (!imageJobProcessing) {
+            chatInput.focus();
+          }
+        }
+      }
+
+      function setChatLocked(locked) {
+        imageJobProcessing = locked;
+        chatInput.disabled = locked || chatPending;
+        chatSend.disabled = locked || chatPending;
+        chatSpace.setAttribute("aria-busy", String(locked || chatPending));
+      }
+
+      function setImageControlsDisabled(disabled) {
+        document.querySelectorAll(".image-picker, .image-file, #add-angle, #process-images")
+          .forEach(control => {
+            control.disabled = disabled;
+          });
+      }
+
+      function appendJobMessage(text, isError = false) {
+        const message = createChatMessage(isError ? "assistant error" : "assistant");
+        message.textContent = text;
+        return message;
+      }
+
+      function applyImageJobEvent(event) {
+        if (event.jobId) {
+          imageJobId = event.jobId;
+        }
+
+        if (["VALIDATING", "ANALYZING", "PROCESSING", "EXPORTING"].includes(event.status)) {
+          if (!imageJobProgressMessage || imageJobProgressMessage.parentElement !== chatMessages) {
+            imageJobProgressMessage = appendJobMessage(event.message);
+          } else {
+            imageJobProgressMessage.replaceChildren(document.createTextNode(event.message));
+          }
+          if (event.status === "PROCESSING") {
+            imageJobProgressMessage.append(document.createElement("br"));
+            showThinking(imageJobProgressMessage);
+          }
+        }
+
+        if (event.status === "PROCESSING" || event.status === "EXPORTING") {
+          setChatLocked(true);
+          setImageControlsDisabled(true);
+        } else if (event.status === "WAITING_FOR_USER") {
+          imageJobWaiting = true;
+          imageJobRevision = imageRevision;
+          setChatLocked(false);
+          setImageControlsDisabled(false);
+          processImagesButton.disabled = false;
+          const warningText = [...(event.warnings || []), event.message].join("\n\n");
+          if (imageJobProgressMessage) {
+            imageJobProgressMessage.remove();
+          }
+          appendJobMessage(warningText);
+          conversation.push({ role: "model", content: warningText });
+          if (conversation.length > 40) {
+            conversation.splice(0, conversation.length - 40);
+          }
+          scrollChatIfFollowing();
+          imageJobProgressMessage = null;
+        } else if (event.status === "COMPLETE") {
+          setChatLocked(false);
+          setImageControlsDisabled(false);
+          imageJobWaiting = false;
+          if (imageJobProgressMessage) {
+            imageJobProgressMessage.remove();
+          }
+          imageJobProgressMessage = null;
+          const message = appendJobMessage(event.message);
+          const link = document.createElement("a");
+          link.href = withSessionToken(event.downloadUrl);
+          link.textContent = `Download ${event.downloadFilename}`;
+          link.setAttribute("download", event.downloadFilename);
+          message.append(document.createElement("br"), link);
+          appendResultPreviews(message, event);
+          if (event.stored && event.imageId) {
+            pendingTagId = event.imageId;
+            appendJobMessage("What is the object? Tell me in a few words, for example Chair, Red, American, French, and I'll save them as tags with these pictures. Say “skip” to leave it untagged.");
+          }
+          imageJobId = null;
+          imageJobContextMessages = [];
+          scrollChatIfFollowing();
+        } else if (event.status === "FAILED") {
+          setChatLocked(false);
+          setImageControlsDisabled(false);
+          imageJobWaiting = false;
+          imageJobId = null;
+          imageJobContextMessages = [];
+          if (imageJobProgressMessage) {
+            imageJobProgressMessage.remove();
+          }
+          imageJobProgressMessage = null;
+          appendJobMessage(event.message || "Image processing failed. Your images are still available to retry.", true);
+          scrollChatIfFollowing();
+        }
+      }
+
+      function appendResultPreviews(message, event) {
+        const warnings = event.warnings || [];
+        if (warnings.length > 0) {
+          const list = document.createElement("ul");
+          list.className = "result-warnings";
+          warnings.forEach(warning => {
+            const item = document.createElement("li");
+            item.textContent = warning;
+            list.append(item);
+          });
+          message.append(list);
+        }
+        const previewUrls = event.previewUrls || [];
+        if (previewUrls.length === 0) {
+          return;
+        }
+        const grid = document.createElement("div");
+        grid.className = "result-grid";
+        previewUrls.forEach((previewUrl, index) => {
+          const number = String(index + 1).padStart(2, "0");
+          const fullUrl = withSessionToken(previewUrl);
+          const caption = `${event.imageId}_${number}.jpg`;
+          const thumb = document.createElement("button");
+          thumb.type = "button";
+          thumb.className = "result-thumb";
+          if (warnings.some(warning => warning.startsWith(`Picture ${index + 1} `))) {
+            thumb.classList.add("flagged");
+          }
+          thumb.setAttribute("aria-label", `Open finished picture ${caption}`);
+          const image = document.createElement("img");
+          image.src = fullUrl;
+          image.alt = caption;
+          image.loading = "lazy";
+          const badge = document.createElement("span");
+          badge.textContent = number;
+          thumb.append(image, badge);
+          thumb.addEventListener("click", () => openImagePreview(fullUrl, caption, thumb));
+          grid.append(thumb);
+        });
+        message.append(grid);
+      }
+
+      async function streamImageJob(url, options) {
+        if (imageJobStreamActive || imageJobProcessing) {
+          return;
+        }
+        imageJobStreamActive = true;
+        processImagesButton.disabled = true;
+        setImageControlsDisabled(true);
+        let terminalEventSeen = false;
+        const controller = new AbortController();
+        // Each picture needs an image-model cutout plus a quality check, so large lots take several minutes.
+        const timeoutId = setTimeout(() => controller.abort(), 20 * 60 * 1000);
+
+        try {
+          const response = await apiFetch(url, { ...options, signal: controller.signal });
+          if (!response.ok) {
+            const detail = await response.text();
+            throw new Error(detail || `Image job request failed (${response.status}).`);
+          }
+          if (!response.body) {
+            throw new Error("This browser does not support image progress streaming.");
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffered = "";
+
+          function processJobFrame(frame) {
+            const dataLines = [];
+            frame.split(/\r?\n/).forEach(line => {
+              if (line.startsWith("data:")) {
+                dataLines.push(line.slice(5).replace(/^ /, ""));
+              }
+            });
+            if (dataLines.length === 0) {
+              return;
+            }
+            const event = JSON.parse(dataLines.join("\n"));
+            applyImageJobEvent(event);
+            if (["WAITING_FOR_USER", "COMPLETE", "FAILED"].includes(event.status)) {
+              terminalEventSeen = true;
+            }
+          }
+
+          while (true) {
+            const { value, done } = await reader.read();
+            buffered += decoder.decode(value || new Uint8Array(), { stream: !done });
+            const frames = buffered.split(/\r?\n\r?\n/);
+            buffered = frames.pop();
+            frames.forEach(processJobFrame);
+            if (done) {
+              break;
+            }
+          }
+          if (buffered.trim()) {
+            processJobFrame(buffered);
+          }
+          if (!terminalEventSeen) {
+            throw new Error("The image job ended before the server reported a result. Your images are still available to retry.");
+          }
+        } catch (error) {
+          controller.abort();
+          imageJobId = null;
+          imageJobWaiting = false;
+          imageJobContextMessages = [];
+          imageJobProgressMessage = null;
+          setChatLocked(false);
+          setImageControlsDisabled(false);
+          appendJobMessage(error.name === "AbortError"
+            ? "Image processing timed out. Your images are still available to retry."
+            : error.message || "Could not reach the image processing service. Your images are still available to retry.",
+          true);
+        } finally {
+          clearTimeout(timeoutId);
+          imageJobStreamActive = false;
+          if (!imageJobProcessing) {
+            processImagesButton.disabled = false;
+          }
+          scrollChatIfFollowing();
+        }
+      }
+
+      chatForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const content = chatInput.value;
+        chatInput.value = "";
+        sendMessage(content);
+      });
+
+      chatInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          chatForm.requestSubmit();
+        }
+      });
+
+      function closeImageMenu(restoreFocus = false) {
+        if (!openImageMenu) {
+          return;
+        }
+        const { menu, picker } = openImageMenu;
+        menu.hidden = true;
+        picker.setAttribute("aria-expanded", "false");
+        openImageMenu = null;
+        if (restoreFocus) {
+          picker.focus();
+        }
+      }
+
+      function createImageMenu(picker, input, image, getPreviewUrl, onRemove) {
+        const menu = document.createElement("div");
+        menu.className = "image-menu";
+        menu.setAttribute("role", "menu");
+        menu.hidden = true;
+
+        const openButton = document.createElement("button");
+        openButton.type = "button";
+        openButton.setAttribute("role", "menuitem");
+        openButton.textContent = "Open Image";
+        openButton.addEventListener("click", () => {
+          const previewUrl = getPreviewUrl();
+          if (previewUrl) {
+            closeImageMenu();
+            openImagePreview(previewUrl, image.alt, picker);
+          }
+        });
+
+        const changeButton = document.createElement("button");
+        changeButton.type = "button";
+        changeButton.setAttribute("role", "menuitem");
+        changeButton.textContent = "Change Image";
+        changeButton.addEventListener("click", () => {
+          closeImageMenu();
+          input.value = "";
+          input.click();
+        });
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.setAttribute("role", "menuitem");
+        removeButton.textContent = "Remove Image";
+        removeButton.addEventListener("click", () => {
+          closeImageMenu();
+          onRemove();
+        });
+
+        menu.append(openButton, changeButton, removeButton);
+        picker.parentElement.append(menu);
+        return menu;
+      }
+
+      // iPhones save photos as HEIC, which most browsers cannot display. HEIC files are converted to
+      // JPEG in the browser so they can be previewed; the converter (~3 MB) loads on first use. The
+      // server converts any image format itself, so a file the browser cannot show still uploads.
+      const heicConverterUrl = "https://cdn.jsdelivr.net/npm/heic-to@1.6.5/dist/iife/heic-to.js";
+      let heicConverter = null;
+
+      function isHeicFile(file) {
+        return /^image\/hei[cf](-sequence)?$/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
+      }
+
+      function loadHeicConverter() {
+        if (!heicConverter) {
+          heicConverter = new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = heicConverterUrl;
+            script.onload = () => window.HeicTo ? resolve(window.HeicTo) : reject(new Error("HEIC converter unavailable"));
+            script.onerror = () => reject(new Error("HEIC converter could not be downloaded"));
+            document.head.append(script);
+          }).catch((error) => {
+            heicConverter = null;
+            throw error;
+          });
+        }
+        return heicConverter;
+      }
+
+      async function convertHeicToJpeg(file) {
+        const convert = await loadHeicConverter();
+        const jpeg = await convert({ blob: file, type: "image/jpeg", quality: 0.92 });
+        const name = /\.hei[cf]$/i.test(file.name) ? file.name.replace(/\.hei[cf]$/i, ".jpg") : `${file.name}.jpg`;
+        return new File([jpeg], name, { type: "image/jpeg", lastModified: file.lastModified });
+      }
+
+      function isImageFile(file) {
+        return file.type.startsWith("image/") || /\.(hei[cf]|hif|avif|tiff?|psd|jfif|webp|bmp)$/i.test(file.name);
+      }
+
+      // Stands in for the preview of a photo the browser cannot display; the server still converts it.
+      function placeholderPreview(fileName) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 540;
+        canvas.height = 400;
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#F3E296";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = "#313423";
+        context.textAlign = "center";
+        context.font = "600 26px Arial, sans-serif";
+        context.fillText("No preview in this browser", canvas.width / 2, 185);
+        context.font = "20px Arial, sans-serif";
+        context.fillText(fileName.length > 42 ? `${fileName.slice(0, 39)}…` : fileName, canvas.width / 2, 225);
+        return canvas.toDataURL("image/png");
+      }
+
+      // Calls onLoaded(previewUrl, file) with the file to upload, which is a JPEG copy for HEIC photos.
+      async function loadImageFile(file, onLoaded, onInvalid) {
+        if (!isImageFile(file)) {
+          uploadStatus.textContent = "Choose a valid image file.";
+          onInvalid();
+          return;
+        }
+        if (isHeicFile(file)) {
+          uploadStatus.textContent = `Converting ${file.name} from HEIC to JPEG…`;
+          setImageControlsDisabled(true);
+          try {
+            file = await convertHeicToJpeg(file);
+          } catch (error) {
+            uploadStatus.textContent = `${file.name} has no preview; MarketPix converts it when you click Process.`;
+            onLoaded(placeholderPreview(file.name), file);
+            return;
+          } finally {
+            setImageControlsDisabled(imageJobProcessing || imageJobStreamActive);
+          }
+        }
+
+        const candidateUrl = URL.createObjectURL(file);
+        const candidateImage = new Image();
+        candidateImage.onload = () => onLoaded(candidateUrl, file);
+        candidateImage.onerror = () => {
+          URL.revokeObjectURL(candidateUrl);
+          uploadStatus.textContent = `${file.name} has no preview; MarketPix converts it when you click Process.`;
+          onLoaded(placeholderPreview(file.name), file);
+        };
+        candidateImage.src = candidateUrl;
+      }
+
+      function connectImagePicker(picker, initialPreview = {}) {
+        const input = picker.parentElement.querySelector(".image-file");
+        const image = picker.querySelector(".sketch");
+        const imageNumber = picker.querySelector(".image-number");
+        const originalImageSource = image.getAttribute("src");
+        const originalImageAlt = image.alt;
+        const originalPickerLabel = picker.getAttribute("aria-label");
+        let previewUrl = initialPreview.previewUrl || null;
+        const menu = createImageMenu(picker, input, image, () => previewUrl, () => {
+          if (initialPreview.onRemove) {
+            initialPreview.onRemove();
+            return;
+          }
+
+          if (previewUrl) {
+            URL.revokeObjectURL(previewUrl);
+            activePreviewUrls.delete(previewUrl);
+            previewUrl = null;
+          }
+          image.src = originalImageSource;
+          image.alt = originalImageAlt;
+          picker.classList.remove("has-upload");
+          picker.setAttribute("aria-label", originalPickerLabel);
+          input.value = "";
+          currentImageFiles.delete(input);
+          imageRevision += 1;
+          uploadStatus.textContent = "Image removed. The original angle sketch was restored.";
+          if (initialPreview.onPreviewChange) {
+            initialPreview.onPreviewChange(null, null, null);
+          }
+          refreshImageNumbers();
+        });
+
+        if (previewUrl) {
+          activePreviewUrls.add(previewUrl);
+          image.src = previewUrl;
+          image.alt = initialPreview.alt;
+          picker.classList.add("has-upload");
+          picker.setAttribute("aria-label", `View or change ${initialPreview.alt}`);
+          if (initialPreview.file) {
+            currentImageFiles.set(input, initialPreview.file);
+          }
+        }
+
+        picker.addEventListener("click", () => {
+          if (!previewUrl) {
+            input.value = "";
+            input.click();
+            return;
+          }
+
+          if (openImageMenu && openImageMenu.menu !== menu) {
+            closeImageMenu();
+          }
+          menu.hidden = !menu.hidden;
+          picker.setAttribute("aria-expanded", String(!menu.hidden));
+          openImageMenu = menu.hidden ? null : { menu, picker };
+          if (!menu.hidden) {
+            menu.querySelector("button").focus();
+          }
+        });
+
+        input.addEventListener("change", () => {
+          const selected = input.files && input.files[0];
+          if (!selected) {
+            return;
+          }
+
+          loadImageFile(selected, (candidateUrl, file) => {
+            const previousUrl = previewUrl;
+            previewUrl = candidateUrl;
+            activePreviewUrls.add(candidateUrl);
+            image.src = candidateUrl;
+            image.alt = file.name;
+            picker.setAttribute("aria-label", `View or change ${file.name}`);
+            picker.classList.add("has-upload");
+            currentImageFiles.set(input, file);
+            imageRevision += 1;
+            uploadStatus.textContent = `${file.name} preview updated.`;
+            if (previousUrl) {
+              URL.revokeObjectURL(previousUrl);
+              activePreviewUrls.delete(previousUrl);
+            }
+            if (initialPreview.onPreviewChange) {
+              initialPreview.onPreviewChange(previousUrl, candidateUrl, file);
+            }
+            refreshImageNumbers();
+          }, () => {
+            input.value = "";
+          });
+        });
+        if (!imageNumber) {
+          const numberBadge = document.createElement("span");
+          numberBadge.className = "image-number";
+          numberBadge.setAttribute("aria-hidden", "true");
+          numberBadge.hidden = true;
+          picker.append(numberBadge);
+        }
+      }
+
+      function createExtraAngleSlot(file, previewUrl) {
+        const card = document.createElement("div");
+        card.className = "angle-card extra-angle";
+
+        const picker = document.createElement("button");
+        picker.className = "image-picker";
+        picker.type = "button";
+        picker.setAttribute("aria-haspopup", "menu");
+        picker.setAttribute("aria-expanded", "false");
+
+        const input = document.createElement("input");
+        input.type = "file";
+        input.className = "image-file";
+        input.accept = "image/*,.heic,.heif,.avif,.tif,.tiff,.psd";
+
+        const image = document.createElement("img");
+        image.className = "sketch";
+
+        const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        icon.setAttribute("class", "upload-icon");
+        icon.setAttribute("viewBox", "0 0 24 24");
+        icon.setAttribute("fill", "none");
+        icon.setAttribute("aria-hidden", "true");
+
+        const uploadPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        uploadPath.setAttribute("d", "M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5");
+        uploadPath.setAttribute("stroke", "currentColor");
+        uploadPath.setAttribute("stroke-width", "1.8");
+        uploadPath.setAttribute("stroke-linecap", "round");
+        uploadPath.setAttribute("stroke-linejoin", "round");
+        icon.append(uploadPath);
+        picker.append(image, icon);
+
+        const label = document.createElement("span");
+        label.className = "angle-name";
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "remove-extra";
+        removeButton.setAttribute("aria-label", "Remove extra angle image");
+        removeButton.title = "Remove extra angle";
+
+        const removeIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        removeIcon.setAttribute("viewBox", "0 0 24 24");
+        removeIcon.setAttribute("fill", "none");
+        removeIcon.setAttribute("aria-hidden", "true");
+
+        const removePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        removePath.setAttribute("d", "M6 6l12 12M18 6 6 18");
+        removePath.setAttribute("stroke", "currentColor");
+        removePath.setAttribute("stroke-width", "2");
+        removePath.setAttribute("stroke-linecap", "round");
+        removeIcon.append(removePath);
+        removeButton.append(removeIcon);
+
+        const slot = { card, picker, input, image, label, removeButton, previewUrl, file };
+        removeButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          removeExtraAngleSlot(slot);
+        });
+
+        card.append(picker, input, label, removeButton);
+        angleGrid.insertBefore(card, addAngleButton);
+        extraAngleSlots.push(slot);
+        imageRevision += 1;
+        connectImagePicker(picker, {
+          previewUrl,
+          file,
+          alt: file.name,
+          onPreviewChange: (_previousUrl, nextUrl, nextFile) => {
+            slot.previewUrl = nextUrl;
+            slot.file = nextFile;
+            if (nextFile) {
+              currentImageFiles.set(input, nextFile);
+            } else {
+              currentImageFiles.delete(input);
+            }
+          },
+          onRemove: () => {
+            removeExtraAngleSlot(slot);
+          }
+        });
+        refreshExtraAngleLabels();
+        refreshImageNumbers();
+      }
+
+      function removeExtraAngleSlot(slot) {
+        const slotIndex = extraAngleSlots.indexOf(slot);
+        if (slotIndex === -1) {
+          return;
+        }
+
+        if (openImageMenu && openImageMenu.picker === slot.picker) {
+          closeImageMenu();
+        }
+        URL.revokeObjectURL(slot.previewUrl);
+        activePreviewUrls.delete(slot.previewUrl);
+        currentImageFiles.delete(slot.input);
+        extraAngleSlots.splice(slotIndex, 1);
+        imageRevision += 1;
+        slot.card.remove();
+        refreshExtraAngleLabels();
+        const focusTarget = extraAngleSlots[slotIndex] || extraAngleSlots[slotIndex - 1];
+        (focusTarget ? focusTarget.picker : addAngleButton).focus();
+        uploadStatus.textContent = "Extra angle image removed.";
+        refreshImageNumbers();
+      }
+
+      function refreshExtraAngleLabels() {
+        extraAngleSlots.forEach((slot, index) => {
+          const angleNumber = index + 1;
+          slot.label.textContent = `Extra Angle ${angleNumber}`;
+          slot.picker.setAttribute("aria-label", `View or change Extra Angle ${angleNumber}`);
+          slot.input.setAttribute("aria-label", `Choose Extra Angle ${angleNumber} image`);
+          slot.removeButton.setAttribute("aria-label", `Remove Extra Angle ${angleNumber} image`);
+        });
+      }
+
+      function refreshImageNumbers() {
+        let imageNumber = 0;
+        document.querySelectorAll(".angle-card").forEach(card => {
+          const picker = card.querySelector(".image-picker");
+          const input = card.querySelector(".image-file");
+          const badge = picker && picker.querySelector(".image-number");
+          const file = input && currentImageFiles.get(input);
+          if (!badge) {
+            return;
+          }
+          if (file) {
+            imageNumber += 1;
+            badge.textContent = String(imageNumber).padStart(2, "0");
+            badge.hidden = false;
+          } else {
+            badge.textContent = "";
+            badge.hidden = true;
+          }
+        });
+      }
+
+      function startImageJob() {
+        if (imageJobStreamActive || imageJobProcessing) {
+          return;
+        }
+
+        const backgroundFile = backgroundUploadEnabled
+          ? currentImageFiles.get(backgroundCard.querySelector(".image-file"))
+          : null;
+
+        const formData = new FormData();
+        if (backgroundFile) {
+          formData.append("background", backgroundFile, backgroundFile.name);
+        }
+        const context = imageJobWaiting ? imageJobContextMessages.join("\n") : "";
+        if (context) {
+          formData.append("context", context);
+        }
+        let imageCount = 0;
+        document.querySelectorAll(".angle-card").forEach(card => {
+          const input = card.querySelector(".image-file");
+          const file = input && currentImageFiles.get(input);
+          if (!file) {
+            return;
+          }
+          imageCount += 1;
+          formData.append("angle", card.querySelector(".angle-name").textContent);
+          formData.append("images", file, file.name);
+        });
+
+        if (imageCount === 0) {
+          appendJobMessage("Add at least one angle picture before processing.", true);
+          scrollChatIfFollowing();
+          return;
+        }
+        if (imageCount > 64) {
+          appendJobMessage("Upload no more than 64 images in one item.", true);
+          scrollChatIfFollowing();
+          return;
+        }
+
+        imageJobId = null;
+        imageJobWaiting = false;
+        pendingTagId = null;
+        imageJobRevision = imageRevision;
+        streamImageJob(`${apiBaseUrl}/api/images/jobs`, {
+          method: "POST",
+          body: formData
+        });
+      }
+
+      extraAngleInput.addEventListener("change", () => {
+        const selected = extraAngleInput.files && extraAngleInput.files[0];
+        if (!selected) {
+          return;
+        }
+
+        loadImageFile(selected, (previewUrl, file) => {
+          createExtraAngleSlot(file, previewUrl);
+          uploadStatus.textContent = `${file.name} added as Extra Angle ${extraAngleSlots.length}.`;
+          extraAngleInput.value = "";
+        }, () => {
+          extraAngleInput.value = "";
+        });
+      });
+
+      function updateLightboxTransform() {
+        const maxPanX = Math.max(0, (lightboxFitWidth * lightboxZoom - lightboxViewport.clientWidth) / 2);
+        const maxPanY = Math.max(0, (lightboxFitHeight * lightboxZoom - lightboxViewport.clientHeight) / 2);
+        lightboxPanX = Math.max(-maxPanX, Math.min(maxPanX, lightboxPanX));
+        lightboxPanY = Math.max(-maxPanY, Math.min(maxPanY, lightboxPanY));
+        lightboxImage.style.transform =
+          `translate(${lightboxPanX}px, ${lightboxPanY}px) scale(${lightboxZoom})`;
+        lightboxViewport.classList.toggle("is-zoomed", lightboxZoom > 1);
+      }
+
+      function setLightboxZoom(zoom) {
+        lightboxZoom = Math.max(1, Math.min(5, zoom));
+        if (lightboxZoom === 1) {
+          lightboxPanX = 0;
+          lightboxPanY = 0;
+        }
+        updateLightboxTransform();
+      }
+
+      function openImagePreview(previewUrl, alt, trigger) {
+        lightboxTrigger = trigger;
+        lightboxImage.alt = alt;
+        lightboxCaption.textContent = alt;
+        imageLightbox.hidden = false;
+        document.body.style.overflow = "hidden";
+        lightboxFitWidth = 0;
+        lightboxFitHeight = 0;
+        setLightboxZoom(1);
+        lightboxImage.onload = () => {
+          lightboxFitWidth = lightboxImage.clientWidth;
+          lightboxFitHeight = lightboxImage.clientHeight;
+          updateLightboxTransform();
+        };
+        lightboxImage.src = previewUrl;
+        document.querySelector("#close-lightbox").focus();
+      }
+
+      function closeImagePreview() {
+        if (imageLightbox.hidden) {
+          return;
+        }
+        imageLightbox.hidden = true;
+        lightboxImage.removeAttribute("src");
+        lightboxImage.style.transform = "";
+        document.body.style.overflow = "";
+        if (lightboxTrigger) {
+          lightboxTrigger.focus();
+          lightboxTrigger = null;
+        }
+      }
+
+      document.querySelector("#zoom-in").addEventListener("click", () => {
+        setLightboxZoom(lightboxZoom * 1.25);
+      });
+      document.querySelector("#zoom-out").addEventListener("click", () => {
+        setLightboxZoom(lightboxZoom / 1.25);
+      });
+      document.querySelector("#zoom-reset").addEventListener("click", () => {
+        setLightboxZoom(1);
+      });
+      document.querySelector("#close-lightbox").addEventListener("click", closeImagePreview);
+      imageLightbox.addEventListener("click", (event) => {
+        if (event.target === imageLightbox) {
+          closeImagePreview();
+        }
+      });
+      lightboxViewport.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        setLightboxZoom(lightboxZoom * (event.deltaY < 0 ? 1.15 : 1 / 1.15));
+      }, { passive: false });
+      lightboxViewport.addEventListener("pointerdown", (event) => {
+        if (lightboxZoom <= 1) {
+          return;
+        }
+        panStart = {
+          pointerId: event.pointerId,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          panX: lightboxPanX,
+          panY: lightboxPanY
+        };
+        lightboxViewport.setPointerCapture(event.pointerId);
+        lightboxViewport.classList.add("is-panning");
+        event.preventDefault();
+      });
+      lightboxViewport.addEventListener("pointermove", (event) => {
+        if (!panStart || event.pointerId !== panStart.pointerId) {
+          return;
+        }
+        lightboxPanX = panStart.panX + event.clientX - panStart.clientX;
+        lightboxPanY = panStart.panY + event.clientY - panStart.clientY;
+        updateLightboxTransform();
+      });
+      function stopPanning(event) {
+        if (panStart && event.pointerId === panStart.pointerId) {
+          panStart = null;
+          lightboxViewport.classList.remove("is-panning");
+        }
+      }
+      lightboxViewport.addEventListener("pointerup", stopPanning);
+      lightboxViewport.addEventListener("pointercancel", stopPanning);
+      window.addEventListener("resize", () => {
+        if (!imageLightbox.hidden) {
+          lightboxFitWidth = lightboxImage.clientWidth;
+          lightboxFitHeight = lightboxImage.clientHeight;
+          updateLightboxTransform();
+        }
+      });
+      document.addEventListener("click", (event) => {
+        if (openImageMenu && !openImageMenu.menu.contains(event.target)
+                && !openImageMenu.picker.contains(event.target)) {
+          closeImageMenu();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") {
+          return;
+        }
+        if (!imageLightbox.hidden) {
+          closeImagePreview();
+        } else if (openImageMenu) {
+          closeImageMenu(true);
+        }
+      });
+      window.addEventListener("beforeunload", () => {
+        activePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+      });
+
+      document.querySelectorAll(".image-picker").forEach(connectImagePicker);
+
+      addAngleButton.addEventListener("click", () => {
+        extraAngleInput.value = "";
+        extraAngleInput.click();
+      });
+
+      processImagesButton.addEventListener("click", startImageJob);
+
+      // A single-item job streams its progress to this page, so leaving mid-job loses the result.
+      // Bulk jobs run on the server and can be left freely.
+      function confirmLeavingDuringJob(event) {
+        if (imageJobStreamActive && !window.confirm(
+          "An item is still processing. If you leave this page you won't see its result. Leave anyway?")) {
+          event.preventDefault();
+          return false;
+        }
+        return true;
+      }
+
+      document.querySelectorAll(".page-tab").forEach((tab) => {
+        tab.addEventListener("click", confirmLeavingDuringJob);
+      });
+      document.querySelector("#logout").addEventListener("click", (event) => {
+        if (confirmLeavingDuringJob(event)) {
+          logout();
+        }
+      });
+    </script>
+  </body>
+</html>

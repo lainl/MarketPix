@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gallery</title>
+    <link rel="icon" href="data:,">
+    <script src="session.js"></script>
+    <script>requireSession();</script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: flex;
+        min-height: 100vh;
+        min-height: 100dvh;
+        flex-direction: column;
+        gap: 16px;
+        padding: 32px;
+        background: #9B9E76;
+        color: #313423;
+        font-family: Arial, sans-serif;
+      }
+
+      .page-nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: min(1120px, 100%);
+        margin: 0 auto;
+      }
+
+      .page-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid rgba(49, 52, 35, 0.18);
+        border-radius: 14px;
+        background: rgba(243, 226, 150, 0.2);
+      }
+
+      .page-tab,
+      .logout-button {
+        display: inline-flex;
+        min-height: 36px;
+        align-items: center;
+        padding: 0 16px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        background: transparent;
+        color: #313423;
+        font: inherit;
+        font-size: 14px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background-color 160ms ease;
+      }
+
+      .page-tab:hover,
+      .logout-button:hover {
+        background: rgba(243, 226, 150, 0.55);
+      }
+
+      .page-tab[aria-current="page"] {
+        border-color: rgba(49, 52, 35, 0.35);
+        background: #F3E296;
+        font-weight: 600;
+      }
+
+      .page-tab:focus-visible,
+      .logout-button:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 2px;
+      }
+
+      .gallery-workspace {
+        display: grid;
+        gap: 16px;
+        width: min(1120px, 100%);
+        margin: 0 auto;
+      }
+
+      .gallery-panel {
+        padding: 28px;
+        border: 1px solid rgba(49, 52, 35, 0.18);
+        border-radius: 20px;
+        background: rgba(243, 226, 150, 0.2);
+      }
+
+      .gallery-panel h1 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 600;
+      }
+
+      .gallery-subtitle {
+        margin: 8px 0 0;
+        color: #57573e;
+        font-size: 15px;
+        line-height: 1.45;
+      }
+
+      .filters {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr) auto;
+        align-items: end;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .field input,
+      .gallery-button {
+        min-height: 48px;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 14px;
+        background: #F3E296;
+        color: #313423;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 400;
+      }
+
+      .field input {
+        width: 100%;
+        min-width: 0;
+        padding: 0 14px;
+      }
+
+      .field input::placeholder {
+        color: #57573e;
+        opacity: 1;
+      }
+
+      .gallery-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 22px;
+        box-shadow: 0 3px 0 rgba(49, 52, 35, 0.25);
+        text-decoration: none;
+        cursor: pointer;
+        transition: transform 160ms ease, box-shadow 160ms ease;
+      }
+
+      .gallery-button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 10px rgba(49, 52, 35, 0.22);
+      }
+
+      .gallery-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      .gallery-button.quiet {
+        background: transparent;
+        box-shadow: none;
+      }
+
+      .gallery-button.small {
+        min-height: 36px;
+        padding: 0 16px;
+        font-size: 14px;
+      }
+
+      .gallery-button[hidden] {
+        display: none;
+      }
+
+      .field input:focus-visible,
+      .gallery-button:focus-visible,
+      .chip:focus-visible,
+      .card-open:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 3px;
+      }
+
+      .filter-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .quick-ranges,
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .chip-row[hidden] {
+        display: none;
+      }
+
+      .row-label {
+        color: #57573e;
+        font-size: 13px;
+      }
+
+      .chip {
+        display: inline-flex;
+        min-height: 30px;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        border: 1px solid rgba(49, 52, 35, 0.3);
+        border-radius: 15px;
+        background: rgba(243, 226, 150, 0.55);
+        color: #313423;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .chip:hover {
+        background: #F3E296;
+      }
+
+      .chip.selected {
+        border-color: #313423;
+        background: #313423;
+        color: #fff8d5;
+      }
+
+      .chip .count {
+        color: #57573e;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .chip.selected .count {
+        color: #d8cfa2;
+      }
+
+      .gallery-message {
+        min-height: 20px;
+        margin: 16px 0 0;
+        color: #57573e;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .gallery-message.error {
+        color: #762f20;
+      }
+
+      .gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 16px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .card {
+        overflow: hidden;
+        border: 1px solid rgba(49, 52, 35, 0.18);
+        border-radius: 16px;
+        background: rgba(243, 226, 150, 0.35);
+      }
+
+      .card-open {
+        position: relative;
+        display: block;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: #ffffff;
+        cursor: pointer;
+      }
+
+      .card-open img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1;
+        object-fit: contain;
+      }
+
+      .image-count {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        padding: 4px 8px;
+        border-radius: 9px;
+        background: rgba(49, 52, 35, 0.82);
+        color: #fff8d5;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .card-body {
+        display: grid;
+        gap: 8px;
+        padding: 12px 14px 14px;
+      }
+
+      .card-id {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        overflow-wrap: anywhere;
+      }
+
+      .card-date {
+        margin: 0;
+        color: #57573e;
+        font-size: 13px;
+      }
+
+      .card-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .card-tags .chip {
+        min-height: 26px;
+        padding: 0 10px;
+        font-size: 12px;
+      }
+
+      .no-tags {
+        color: #57573e;
+        font-size: 12px;
+        font-style: italic;
+      }
+
+      .load-more {
+        display: flex;
+        justify-content: center;
+      }
+
+      .load-more[hidden] {
+        display: none;
+      }
+
+      .set-dialog {
+        width: min(960px, calc(100vw - 32px));
+        max-height: calc(100vh - 32px);
+        padding: 24px;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 20px;
+        background: #fff8d5;
+        color: #313423;
+        box-shadow: 0 18px 40px rgba(24, 25, 18, 0.35);
+      }
+
+      .set-dialog::backdrop {
+        background: rgba(24, 25, 18, 0.6);
+      }
+
+      .dialog-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .dialog-head h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+
+      .dialog-head p {
+        margin: 4px 0 0;
+        color: #57573e;
+        font-size: 14px;
+      }
+
+      .dialog-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .set-dialog .card-tags {
+        margin-top: 14px;
+      }
+
+      .set-images {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .set-images a {
+        display: block;
+        overflow: hidden;
+        border: 1px solid rgba(49, 52, 35, 0.2);
+        border-radius: 14px;
+        background: #ffffff;
+      }
+
+      .set-images img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1;
+        object-fit: contain;
+      }
+
+      @media (max-width: 860px) {
+        .filters {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        }
+
+        .tag-field,
+        .filter-actions {
+          grid-column: 1 / -1;
+        }
+      }
+
+      @media (max-width: 440px) {
+        body {
+          padding: 20px 16px;
+        }
+
+        .gallery-panel {
+          padding: 18px;
+        }
+
+        .filters {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .set-dialog {
+          padding: 16px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="page-nav" aria-label="Pages">
+      <div class="page-tabs">
+        <a class="page-tab" href="Home.html">Single item</a>
+        <a class="page-tab" href="BulkEdit.html">Bulk edit</a>
+        <a class="page-tab" href="Gallery.html" aria-current="page">Gallery</a>
+      </div>
+      <button class="logout-button" type="button" id="logout">Log out</button>
+    </nav>
+    <main class="gallery-workspace">
+      <section class="gallery-panel" aria-labelledby="gallery-title">
+        <h1 id="gallery-title">Gallery</h1>
+        <p class="gallery-subtitle">Every finished set saved to cloud storage. Filter by the day it was made and by its tags.</p>
+        <form class="filters" id="filters" novalidate>
+          <label class="field">From
+            <input type="date" name="from" id="filter-from">
+          </label>
+          <label class="field">To
+            <input type="date" name="to" id="filter-to">
+          </label>
+          <label class="field tag-field">Tag
+            <input type="text" name="tag" id="filter-tag" list="tag-options" placeholder="Type a tag, such as Chair, and press Enter" autocomplete="off">
+          </label>
+          <div class="filter-actions">
+            <button class="gallery-button" type="submit" id="filter-search">Search</button>
+            <button class="gallery-button quiet" type="button" id="filter-clear">Clear</button>
+          </div>
+          <datalist id="tag-options"></datalist>
+        </form>
+        <div class="quick-ranges" aria-label="Quick date ranges">
+          <span class="row-label">Made in:</span>
+          <button class="chip" type="button" data-days="1">Today</button>
+          <button class="chip" type="button" data-days="7">Last 7 days</button>
+          <button class="chip" type="button" data-days="30">Last 30 days</button>
+          <button class="chip" type="button" data-days="0">Any time</button>
+        </div>
+        <div class="chip-row" id="selected-tags" hidden>
+          <span class="row-label">Showing sets tagged with all of:</span>
+        </div>
+        <div class="chip-row" id="tag-facets" hidden>
+          <span class="row-label">Tags in these results:</span>
+        </div>
+        <p class="gallery-message" id="gallery-message" role="status" aria-live="polite"></p>
+      </section>
+
+      <ul class="gallery-grid" id="gallery-grid" aria-label="Saved sets"></ul>
+      <div class="load-more" id="load-more" hidden>
+        <button class="gallery-button" type="button" id="load-more-button">Show more</button>
+      </div>
+    </main>
+
+    <dialog class="set-dialog" id="set-dialog" aria-labelledby="set-title">
+      <div class="dialog-head">
+        <div>
+          <h2 id="set-title"></h2>
+          <p id="set-date"></p>
+        </div>
+        <div class="dialog-actions">
+          <a class="gallery-button small" id="set-download">Download ZIP</a>
+          <button class="gallery-button small quiet" type="button" id="set-close">Close</button>
+        </div>
+      </div>
+      <div class="card-tags" id="set-tags"></div>
+      <div class="set-images" id="set-images"></div>
+    </dialog>
+
+    <script>
+      const filterForm = document.querySelector("#filters");
+      const fromInput = document.querySelector("#filter-from");
+      const toInput = document.querySelector("#filter-to");
+      const tagInput = document.querySelector("#filter-tag");
+      const searchButton = document.querySelector("#filter-search");
+      const tagOptions = document.querySelector("#tag-options");
+      const selectedRow = document.querySelector("#selected-tags");
+      const facetRow = document.querySelector("#tag-facets");
+      const galleryMessage = document.querySelector("#gallery-message");
+      const galleryGrid = document.querySelector("#gallery-grid");
+      const loadMore = document.querySelector("#load-more");
+      const loadMoreButton = document.querySelector("#load-more-button");
+      const setDialog = document.querySelector("#set-dialog");
+      const pageSize = 48;
+      const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+      let selectedTags = [];
+      let loadedCount = 0;
+      let requestNumber = 0;
+
+      function showMessage(text, isError = false) {
+        galleryMessage.textContent = text || "";
+        galleryMessage.classList.toggle("error", isError);
+      }
+
+      // The filters live in the address bar so a search can be bookmarked or reloaded.
+      function readFiltersFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        fromInput.value = params.get("from") || "";
+        toInput.value = params.get("to") || "";
+        selectedTags = params.getAll("tag");
+      }
+
+      function filterParams() {
+        const params = new URLSearchParams();
+        if (fromInput.value) {
+          params.set("from", fromInput.value);
+        }
+        if (toInput.value) {
+          params.set("to", toInput.value);
+        }
+        selectedTags.forEach((tag) => params.append("tag", tag));
+        return params;
+      }
+
+      function sameTag(a, b) {
+        return a.toLowerCase() === b.toLowerCase();
+      }
+
+      function addTag(tag) {
+        const cleaned = tag.trim();
+        if (cleaned && !selectedTags.some((existing) => sameTag(existing, cleaned))) {
+          selectedTags.push(cleaned);
+        }
+      }
+
+      function removeTag(tag) {
+        selectedTags = selectedTags.filter((existing) => !sameTag(existing, tag));
+      }
+
+      function chip(label, { selected = false, count = null, title = "" } = {}) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = selected ? "chip selected" : "chip";
+        button.textContent = selected ? `${label} ✕` : label;
+        if (count !== null) {
+          const counter = document.createElement("span");
+          counter.className = "count";
+          counter.textContent = count;
+          button.append(counter);
+        }
+        if (title) {
+          button.title = title;
+          button.setAttribute("aria-label", title);
+        }
+        return button;
+      }
+
+      function renderSelectedTags() {
+        selectedRow.querySelectorAll(".chip").forEach((element) => element.remove());
+        selectedTags.forEach((tag) => {
+          const button = chip(tag, { selected: true, title: `Remove the ${tag} filter` });
+          button.addEventListener("click", () => {
+            removeTag(tag);
+            search();
+          });
+          selectedRow.append(button);
+        });
+        selectedRow.hidden = selectedTags.length === 0;
+      }
+
+      function renderFacets(facets) {
+        facetRow.querySelectorAll(".chip").forEach((element) => element.remove());
+        const unused = facets.filter((facet) => !selectedTags.some((tag) => sameTag(tag, facet.tag)));
+        unused.forEach((facet) => {
+          const button = chip(facet.tag, { count: facet.count, title: `Only show sets tagged ${facet.tag} (${facet.count})` });
+          button.addEventListener("click", () => {
+            addTag(facet.tag);
+            search();
+          });
+          facetRow.append(button);
+        });
+        facetRow.hidden = unused.length === 0;
+        tagOptions.replaceChildren(...facets.map((facet) => {
+          const option = document.createElement("option");
+          option.value = facet.tag;
+          return option;
+        }));
+      }
+
+      function renderCard(item) {
+        const card = document.createElement("li");
+        card.className = "card";
+
+        const open = document.createElement("button");
+        open.type = "button";
+        open.className = "card-open";
+        open.setAttribute("aria-label", `Open ${item.id}`);
+        if (item.imageUrls.length > 0) {
+          const cover = document.createElement("img");
+          cover.src = withSessionToken(item.imageUrls[0]);
+          cover.alt = item.tags.length ? item.tags.join(", ") : item.id;
+          cover.loading = "lazy";
+          cover.decoding = "async";
+          open.append(cover);
+        }
+        const count = document.createElement("span");
+        count.className = "image-count";
+        count.textContent = `${item.imageUrls.length} ${item.imageUrls.length === 1 ? "photo" : "photos"}`;
+        open.append(count);
+        open.addEventListener("click", () => openSet(item));
+
+        const body = document.createElement("div");
+        body.className = "card-body";
+        const id = document.createElement("p");
+        id.className = "card-id";
+        id.textContent = item.id;
+        const date = document.createElement("p");
+        date.className = "card-date";
+        date.textContent = dateFormat.format(new Date(item.createdAt));
+        body.append(id, date, renderItemTags(item.tags));
+
+        card.append(open, body);
+        return card;
+      }
+
+      // Clicking a tag on a set filters by it.
+      function renderItemTags(tags) {
+        const container = document.createElement("div");
+        container.className = "card-tags";
+        if (tags.length === 0) {
+          const none = document.createElement("span");
+          none.className = "no-tags";
+          none.textContent = "No tags";
+          container.append(none);
+          return container;
+        }
+        tags.forEach((tag) => {
+          const isSelected = selectedTags.some((existing) => sameTag(existing, tag));
+          const button = chip(tag, { title: isSelected ? `Filtering by ${tag}` : `Only show sets tagged ${tag}` });
+          button.textContent = tag;
+          button.disabled = isSelected;
+          button.addEventListener("click", () => {
+            if (setDialog.open) {
+              setDialog.close();
+            }
+            addTag(tag);
+            search();
+          });
+          container.append(button);
+        });
+        return container;
+      }
+
+      function openSet(item) {
+        document.querySelector("#set-title").textContent = item.id;
+        document.querySelector("#set-date").textContent = dateFormat.format(new Date(item.createdAt));
+        const download = document.querySelector("#set-download");
+        download.href = withSessionToken(item.downloadUrl);
+        download.setAttribute("download", `${item.id}.zip`);
+        document.querySelector("#set-tags").replaceWith(Object.assign(renderItemTags(item.tags), { id: "set-tags" }));
+        document.querySelector("#set-images").replaceChildren(...item.imageUrls.map((url, index) => {
+          const link = document.createElement("a");
+          link.href = withSessionToken(url);
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.title = `Open photo ${index + 1} at full size`;
+          const image = document.createElement("img");
+          image.src = withSessionToken(url);
+          image.alt = `${item.id} photo ${index + 1}`;
+          image.loading = "lazy";
+          link.append(image);
+          return link;
+        }));
+        setDialog.showModal();
+      }
+
+      async function fetchPage(offset) {
+        const params = filterParams();
+        params.set("offset", String(offset));
+        params.set("limit", String(pageSize));
+        const response = await apiFetch(`${apiBaseUrl}/api/images/records?${params}`);
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.message || `The gallery could not be loaded (${response.status}).`);
+        }
+        return body;
+      }
+
+      function describeResults(total) {
+        const filtered = fromInput.value || toInput.value || selectedTags.length > 0;
+        if (total === 0) {
+          return filtered ? "No saved sets match these filters." : "No sets have been saved yet.";
+        }
+        return `${total} ${total === 1 ? "set" : "sets"}${filtered ? " match" : " saved"}.`;
+      }
+
+      async function search() {
+        if (fromInput.value && toInput.value && fromInput.value > toInput.value) {
+          showMessage("The From date is after the To date.", true);
+          return;
+        }
+        const params = filterParams();
+        const query = params.toString();
+        history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+        renderSelectedTags();
+        const current = ++requestNumber;
+        searchButton.disabled = true;
+        showMessage("Loading the gallery…");
+        try {
+          const page = await fetchPage(0);
+          if (current !== requestNumber) {
+            return;
+          }
+          galleryGrid.replaceChildren(...page.items.map(renderCard));
+          loadedCount = page.items.length;
+          loadMore.hidden = loadedCount >= page.total;
+          renderFacets(page.tags || []);
+          showMessage(describeResults(page.total));
+        } catch (error) {
+          if (current === requestNumber) {
+            galleryGrid.replaceChildren();
+            loadMore.hidden = true;
+            showMessage(error.message, true);
+          }
+        } finally {
+          if (current === requestNumber) {
+            searchButton.disabled = false;
+          }
+        }
+      }
+
+      loadMoreButton.addEventListener("click", async () => {
+        const current = requestNumber;
+        loadMoreButton.disabled = true;
+        try {
+          const page = await fetchPage(loadedCount);
+          if (current !== requestNumber) {
+            return;
+          }
+          galleryGrid.append(...page.items.map(renderCard));
+          loadedCount += page.items.length;
+          loadMore.hidden = loadedCount >= page.total || page.items.length === 0;
+        } catch (error) {
+          showMessage(error.message, true);
+        } finally {
+          loadMoreButton.disabled = false;
+        }
+      });
+
+      filterForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        addTag(tagInput.value);
+        tagInput.value = "";
+        search();
+      });
+
+      document.querySelector("#filter-clear").addEventListener("click", () => {
+        fromInput.value = "";
+        toInput.value = "";
+        tagInput.value = "";
+        selectedTags = [];
+        search();
+      });
+
+      // Dates from the date inputs are local days; the server compares them in the id time zone.
+      function isoDay(date) {
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${date.getFullYear()}-${month}-${day}`;
+      }
+
+      document.querySelectorAll("[data-days]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const days = Number(button.dataset.days);
+          if (days === 0) {
+            fromInput.value = "";
+            toInput.value = "";
+          } else {
+            const start = new Date();
+            start.setDate(start.getDate() - (days - 1));
+            fromInput.value = isoDay(start);
+            toInput.value = isoDay(new Date());
+          }
+          search();
+        });
+      });
+
+      document.querySelector("#set-close").addEventListener("click", () => setDialog.close());
+      // A click on the backdrop closes the dialog.
+      setDialog.addEventListener("click", (event) => {
+        const box = setDialog.getBoundingClientRect();
+        const outside = event.clientX < box.left || event.clientX > box.right
+          || event.clientY < box.top || event.clientY > box.bottom;
+        if (event.target === setDialog && outside) {
+          setDialog.close();
+        }
+      });
+
+      document.querySelector("#logout").addEventListener("click", logout);
+
+      if (getSessionToken()) {
+        readFiltersFromUrl();
+        search();
+      }
+    </script>
+  </body>
+</html>
