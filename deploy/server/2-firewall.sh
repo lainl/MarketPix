@@ -4,8 +4,9 @@
 # The app's own port 3008 is never published by Docker, so it stays unreachable from outside either way.
 set -Eeuo pipefail
 
-SSH_PORT="$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}')"
+SSH_PORT="$(sshd -T 2>/dev/null | awk '/^port /{print $2}' | head -n 1 || true)"
 SSH_PORT="${SSH_PORT:-22}"
+echo "Keeping SSH open on port $SSH_PORT"
 
 ufw default deny incoming
 ufw default allow outgoing

@@ -7,8 +7,8 @@ set -Eeuo pipefail
 SITE=marketpixs.site
 
 echo "== Packages: certificates, curl, automatic security updates, fail2ban"
-apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl unattended-upgrades fail2ban
+apt-get -o DPkg::Lock::Timeout=600 update
+DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y ca-certificates curl unattended-upgrades fail2ban
 
 echo "== Docker Engine and Docker Compose"
 . /etc/os-release
@@ -20,10 +20,10 @@ if curl -fsI "https://download.docker.com/linux/ubuntu/dists/$CODENAME/Release" 
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $CODENAME stable" \
     > /etc/apt/sources.list.d/docker.list
   apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 else
   echo "Docker's repository has no packages for Ubuntu $CODENAME yet; using Ubuntu's own Docker packages."
-  DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2 docker-buildx
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y docker.io docker-compose-v2 docker-buildx
 fi
 
 # Container logs are rotated (5 files of 10 MB each), and containers keep running while Docker itself updates.
@@ -60,7 +60,8 @@ passwd -l marketpix >/dev/null
 usermod -aG docker marketpix
 install -d -m 750 -o marketpix -g marketpix /opt/marketpix /opt/marketpix/stack /opt/marketpix/runner
 # The app runs as user 10001 inside its container; only it can read the saved logins and bulk jobs.
-install -d -m 700 -o 10001 -g 10001 /opt/marketpix/data /opt/marketpix/data/bulk-jobs
+install -d -m 700 /opt/marketpix/data /opt/marketpix/data/bulk-jobs
+chown -R 10001:10001 /opt/marketpix/data
 install -d -m 700 /opt/marketpix/caddy /opt/marketpix/caddy/data /opt/marketpix/caddy/config
 echo "$SITE" > /opt/marketpix/site
 chown marketpix:marketpix /opt/marketpix/site
