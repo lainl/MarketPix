@@ -16,7 +16,7 @@ import java.util.logging.Logger;
 /**
  * Converts images Java cannot decode, such as iPhone HEIC and AVIF, by calling ImageMagick. The
  * Docker image installs it; elsewhere it is found on the PATH, in the default Windows install folder,
- * or at {@code MARKETPIX_IMAGEMAGICK}.
+ * or at the path set in {@code marketpix.imagemagick} (see {@link ImageMagickSettings}).
  */
 public final class ImageMagickConverter {
 
@@ -25,8 +25,15 @@ public final class ImageMagickConverter {
     private static final String LIMIT = "4096x4096>";
     private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     private static volatile Optional<String> executable;
+    private static volatile String configuredPath = "";
 
     private ImageMagickConverter() {
+    }
+
+    /** Sets the path to try first; the next conversion looks for ImageMagick again. */
+    static synchronized void configure(String path) {
+        configuredPath = path == null ? "" : path.trim();
+        executable = null;
     }
 
     public static boolean isAvailable() {
@@ -87,9 +94,8 @@ public final class ImageMagickConverter {
 
     private static Optional<String> findExecutable() {
         List<String> candidates = new ArrayList<>();
-        String configured = System.getenv("MARKETPIX_IMAGEMAGICK");
-        if (configured != null && !configured.isBlank()) {
-            candidates.add(configured.trim());
+        if (!configuredPath.isEmpty()) {
+            candidates.add(configuredPath);
         }
         candidates.add("magick");
         if (WINDOWS) {

@@ -56,7 +56,7 @@ public class ImageAnalysisService {
     private final OpenAiClient openAi;
     private final String model;
 
-    public ImageAnalysisService(OpenAiClient openAi, @Value("${openai.vision.model:gpt-5.5}") String model) {
+    public ImageAnalysisService(OpenAiClient openAi, @Value("${openai.vision.model}") String model) {
         this.openAi = openAi;
         this.model = model;
     }

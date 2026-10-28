@@ -1,0 +1,60 @@
+name: marketpix
+
+services:
+  app:
+    image: ${MARKETPIX_IMAGE:?written by deploy.sh}
+    container_name: marketpix-app
+    restart: unless-stopped
+    env_file:
+      - path: /opt/marketpix/.env
+        format: raw
+    environment:
+      PORT: "3008"
+      MARKETPIX_UI_DIR: /app/ui
+      MARKETPIX_SESSION_FILE: /data/sessions.json
+      MARKETPIX_BULK_JOBS_DIR: /data/bulk-jobs
+      MARKETPIX_IMAGEMAGICK: ""
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError"
+    volumes:
+      - /opt/marketpix/data:/data
+    expose:
+      - "3008"
+    mem_limit: 2560m
+    stop_grace_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:3008/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2
+    container_name: marketpix-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      MARKETPIX_SITE: ${MARKETPIX_SITE:?written by deploy.sh}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/marketpix/caddy/data:/data
+      - /opt/marketpix/caddy/config:/config
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

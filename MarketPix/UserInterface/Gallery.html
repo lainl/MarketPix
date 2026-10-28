@@ -295,16 +295,109 @@
         object-fit: contain;
       }
 
-      .image-count {
+      .card-cover {
+        position: relative;
+      }
+
+      .card.selected {
+        border-color: #313423;
+        box-shadow: 0 0 0 2px #313423;
+      }
+
+      .card-control {
         position: absolute;
-        right: 8px;
-        bottom: 8px;
-        padding: 4px 8px;
-        border-radius: 9px;
-        background: rgba(49, 52, 35, 0.82);
-        color: #fff8d5;
-        font-size: 11px;
+        top: 8px;
+        display: inline-flex;
+        width: 32px;
+        height: 32px;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 50%;
+        background: rgba(255, 248, 213, 0.92);
+        color: #313423;
+        font: inherit;
+        font-size: 15px;
         font-weight: 700;
+        line-height: 1;
+        box-shadow: 0 1px 3px rgba(49, 52, 35, 0.25);
+        cursor: pointer;
+      }
+
+      .card-control:disabled {
+        cursor: wait;
+        opacity: 0.6;
+      }
+
+      .card-control:focus-visible {
+        outline: 3px solid #fff8d5;
+        outline-offset: 2px;
+      }
+
+      .card-select {
+        left: 8px;
+        width: 26px;
+        height: 26px;
+        top: 11px;
+        border: 2px solid #313423;
+        border-radius: 6px;
+        background: #fff8d5;
+        font-size: 14px;
+      }
+
+      .card-select[aria-pressed="false"] {
+        color: transparent;
+      }
+
+      .card-select[aria-pressed="true"] {
+        border-color: #313423;
+        background: #313423;
+        color: #fff8d5;
+      }
+
+      .card-delete {
+        right: 8px;
+      }
+
+      .card-delete:hover:not(:disabled) {
+        border-color: #762f20;
+        background: #762f20;
+        color: #fff8d5;
+      }
+
+      .selection-bar {
+        position: sticky;
+        top: 12px;
+        z-index: 5;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        border: 1px solid rgba(49, 52, 35, 0.35);
+        border-radius: 16px;
+        background: #F3E296;
+        box-shadow: 0 6px 14px rgba(49, 52, 35, 0.2);
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .selection-bar[hidden] {
+        display: none;
+      }
+
+      .selection-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .gallery-button.danger {
+        border-color: #762f20;
+        background: #762f20;
+        color: #fff8d5;
       }
 
       .card-body {
@@ -505,6 +598,15 @@
         <p class="gallery-message" id="gallery-message" role="status" aria-live="polite"></p>
       </section>
 
+      <div class="selection-bar" id="selection-bar" role="region" aria-label="Selected sets" hidden>
+        <span id="selection-count"></span>
+        <div class="selection-actions">
+          <button class="gallery-button small" type="button" id="selection-download">Download selected</button>
+          <button class="gallery-button small danger" type="button" id="selection-delete">Delete selected</button>
+          <button class="gallery-button small quiet" type="button" id="selection-clear">Clear selection</button>
+        </div>
+      </div>
+
       <ul class="gallery-grid" id="gallery-grid" aria-label="Saved sets"></ul>
       <div class="load-more" id="load-more" hidden>
         <button class="gallery-button" type="button" id="load-more-button">Show more</button>
@@ -518,7 +620,6 @@
           <p id="set-date"></p>
         </div>
         <div class="dialog-actions">
-          <a class="gallery-button small" id="set-download">Download ZIP</a>
           <button class="gallery-button small quiet" type="button" id="set-close">Close</button>
         </div>
       </div>
@@ -540,7 +641,11 @@
       const loadMore = document.querySelector("#load-more");
       const loadMoreButton = document.querySelector("#load-more-button");
       const setDialog = document.querySelector("#set-dialog");
+      const selectionBar = document.querySelector("#selection-bar");
+      const selectionCount = document.querySelector("#selection-count");
       const pageSize = 48;
+      // Selected sets by id; cleared whenever the results are reloaded.
+      const selected = new Map();
       const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
       let selectedTags = [];
       let loadedCount = 0;
@@ -636,27 +741,67 @@
         }));
       }
 
+      function photoCount(count) {
+        return `${count} ${count === 1 ? "photo" : "photos"}`;
+      }
+
       function renderCard(item) {
         const card = document.createElement("li");
         card.className = "card";
+        card.classList.toggle("selected", selected.has(item.id));
+        const cover = document.createElement("div");
+        cover.className = "card-cover";
 
         const open = document.createElement("button");
         open.type = "button";
         open.className = "card-open";
         open.setAttribute("aria-label", `Open ${item.id}`);
         if (item.imageUrls.length > 0) {
-          const cover = document.createElement("img");
-          cover.src = withSessionToken(item.imageUrls[0]);
-          cover.alt = item.tags.length ? item.tags.join(", ") : item.id;
-          cover.loading = "lazy";
-          cover.decoding = "async";
-          open.append(cover);
+          const image = document.createElement("img");
+          image.src = withSessionToken(item.imageUrls[0]);
+          image.alt = item.tags.length ? item.tags.join(", ") : item.id;
+          image.loading = "lazy";
+          image.decoding = "async";
+          open.append(image);
         }
-        const count = document.createElement("span");
-        count.className = "image-count";
-        count.textContent = `${item.imageUrls.length} ${item.imageUrls.length === 1 ? "photo" : "photos"}`;
-        open.append(count);
         open.addEventListener("click", () => openSet(item));
+
+        const select = document.createElement("button");
+        select.type = "button";
+        select.className = "card-control card-select";
+        select.textContent = "✓";
+        select.title = `Select ${item.id}`;
+        select.setAttribute("aria-label", `Select ${item.id}`);
+        select.setAttribute("aria-pressed", String(selected.has(item.id)));
+        select.addEventListener("click", () => {
+          if (selected.has(item.id)) {
+            selected.delete(item.id);
+          } else {
+            selected.set(item.id, item);
+          }
+          card.classList.toggle("selected", selected.has(item.id));
+          select.setAttribute("aria-pressed", String(selected.has(item.id)));
+          updateSelectionBar();
+        });
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "card-control card-delete";
+        remove.textContent = "✕";
+        remove.title = `Delete ${item.id}`;
+        remove.setAttribute("aria-label", `Delete ${item.id}`);
+        remove.addEventListener("click", async () => {
+          const count = item.imageUrls.length;
+          const question = count === 1
+            ? "Are you sure you want to delete this photo?"
+            : `Are you sure you want to delete this set of ${count} photos?`;
+          if (!window.confirm(question)) {
+            return;
+          }
+          remove.disabled = true;
+          await deleteSets([item]);
+        });
+        cover.append(open, select, remove);
 
         const body = document.createElement("div");
         body.className = "card-body";
@@ -665,11 +810,76 @@
         id.textContent = item.id;
         const date = document.createElement("p");
         date.className = "card-date";
-        date.textContent = dateFormat.format(new Date(item.createdAt));
+        date.textContent = dateFormat.format(new Date(item.createdAt))
+          + (item.imageUrls.length > 1 ? ` · ${photoCount(item.imageUrls.length)}` : "");
         body.append(id, date, renderItemTags(item.tags));
 
-        card.append(open, body);
+        card.append(cover, body);
         return card;
+      }
+
+      function updateSelectionBar() {
+        const photos = [...selected.values()].reduce((sum, item) => sum + item.imageUrls.length, 0);
+        selectionBar.hidden = selected.size === 0;
+        selectionCount.textContent = selected.size === photos
+          ? `${photoCount(photos)} selected`
+          : `${selected.size} ${selected.size === 1 ? "set" : "sets"} selected (${photoCount(photos)})`;
+      }
+
+      function clearSelection() {
+        selected.clear();
+        galleryGrid.querySelectorAll(".card.selected").forEach((card) => {
+          card.classList.remove("selected");
+          card.querySelector(".card-select").setAttribute("aria-pressed", "false");
+        });
+        updateSelectionBar();
+      }
+
+      function setSelectionBusy(busy) {
+        selectionBar.querySelectorAll("button").forEach((button) => {
+          button.disabled = busy;
+        });
+      }
+
+      // Deletes one set at a time, then reloads the results so counts and tags stay right.
+      async function deleteSets(items) {
+        setSelectionBusy(true);
+        showMessage(`Deleting ${photoCount(items.reduce((sum, item) => sum + item.imageUrls.length, 0))}…`);
+        const failures = [];
+        for (const item of items) {
+          try {
+            const response = await apiFetch(`${apiBaseUrl}/api/images/records/${encodeURIComponent(item.id)}`, { method: "DELETE" });
+            if (!response.ok) {
+              const body = await response.json().catch(() => ({}));
+              throw new Error(body.message || `the server answered ${response.status}`);
+            }
+          } catch (error) {
+            failures.push(`${item.id} (${error.message})`);
+          }
+        }
+        setSelectionBusy(false);
+        await search();
+        if (failures.length > 0) {
+          showMessage(`Could not delete ${failures.join(", ")}.`, true);
+        }
+      }
+
+      // A single photo downloads as its JPEG; more than one comes as one ZIP.
+      function downloadSelected() {
+        const items = [...selected.values()];
+        const photos = items.flatMap((item) => item.imageUrls);
+        const signed = new URL(withSessionToken(photos.length === 1
+          ? photos[0]
+          : `/api/images/records/download?${new URLSearchParams(items.map((item) => ["id", item.id]))}`));
+        if (photos.length === 1) {
+          signed.searchParams.set("download", "true");
+        }
+        const link = document.createElement("a");
+        link.href = signed.toString();
+        link.download = "";
+        document.body.append(link);
+        link.click();
+        link.remove();
       }
 
       // Clicking a tag on a set filters by it.
@@ -703,9 +913,6 @@
       function openSet(item) {
         document.querySelector("#set-title").textContent = item.id;
         document.querySelector("#set-date").textContent = dateFormat.format(new Date(item.createdAt));
-        const download = document.querySelector("#set-download");
-        download.href = withSessionToken(item.downloadUrl);
-        download.setAttribute("download", `${item.id}.zip`);
         document.querySelector("#set-tags").replaceWith(Object.assign(renderItemTags(item.tags), { id: "set-tags" }));
         document.querySelector("#set-images").replaceChildren(...item.imageUrls.map((url, index) => {
           const link = document.createElement("a");
@@ -760,6 +967,8 @@
           if (current !== requestNumber) {
             return;
           }
+          selected.clear();
+          updateSelectionBar();
           galleryGrid.replaceChildren(...page.items.map(renderCard));
           loadedCount = page.items.length;
           loadMore.hidden = loadedCount >= page.total;
@@ -832,6 +1041,19 @@
           }
           search();
         });
+      });
+
+      document.querySelector("#selection-download").addEventListener("click", downloadSelected);
+      document.querySelector("#selection-clear").addEventListener("click", clearSelection);
+      document.querySelector("#selection-delete").addEventListener("click", () => {
+        const items = [...selected.values()];
+        const photos = items.reduce((sum, item) => sum + item.imageUrls.length, 0);
+        const question = photos === 1
+          ? "Are you sure you want to delete this photo?"
+          : `Are you sure you want to delete these ${photos} photos?`;
+        if (window.confirm(question)) {
+          deleteSets(items);
+        }
       });
 
       document.querySelector("#set-close").addEventListener("click", () => setDialog.close());

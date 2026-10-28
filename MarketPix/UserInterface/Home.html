@@ -131,6 +131,14 @@
         text-align: center;
       }
 
+      .image-picker.drag-over,
+      .add-angle.drag-over {
+        border-style: solid;
+        border-color: #313423;
+        background: rgba(243, 226, 150, 0.85);
+        box-shadow: 0 0 0 3px rgba(49, 52, 35, 0.25);
+      }
+
       .slot-heading {
         display: flex;
         align-items: baseline;
@@ -861,7 +869,25 @@
         </div>
         </div>
         <h2 class="slot-heading">Angles <small>At least one picture required</small></h2>
+        <!-- Front first, then extra angles (added before the + button), then the side views. -->
         <div class="angle-grid" id="angle-grid">
+          <div class="angle-card">
+            <button class="image-picker" type="button" aria-label="Upload front view" aria-haspopup="menu" aria-expanded="false">
+              <img class="sketch" src="img/Front.png" alt="Front view sketch">
+              <span class="image-number" aria-hidden="true" hidden></span>
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <input class="image-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose front view image">
+            <span class="angle-name">Front</span>
+          </div>
+          <button class="add-angle" type="button" id="add-angle" aria-label="Add extra angle">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <span>Extra angle</span>
+          </button>
           <div class="angle-card">
             <button class="image-picker" type="button" aria-label="Upload left quarter view" aria-haspopup="menu" aria-expanded="false">
               <img class="sketch" src="img/Left_Quarter_View.png" alt="Left quarter view sketch">
@@ -885,17 +911,6 @@
             <span class="angle-name">Right Quarter View</span>
           </div>
           <div class="angle-card">
-            <button class="image-picker" type="button" aria-label="Upload front view" aria-haspopup="menu" aria-expanded="false">
-              <img class="sketch" src="img/Front.png" alt="Front view sketch">
-              <span class="image-number" aria-hidden="true" hidden></span>
-              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <input class="image-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose front view image">
-            <span class="angle-name">Front</span>
-          </div>
-          <div class="angle-card">
             <button class="image-picker" type="button" aria-label="Upload side flat view" aria-haspopup="menu" aria-expanded="false">
               <img class="sketch" src="img/Side_Flat.png" alt="Side flat sketch">
               <span class="image-number" aria-hidden="true" hidden></span>
@@ -906,12 +921,6 @@
             <input class="image-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose side flat image">
             <span class="angle-name">Side Flat</span>
           </div>
-          <button class="add-angle" type="button" id="add-angle" aria-label="Add extra angle">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-            <span>Extra angle</span>
-          </button>
         </div>
         <input class="image-file" id="extra-angle-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose an extra angle image">
         <p class="visually-hidden" id="image-upload-status" role="status" aria-live="polite"></p>
@@ -1671,10 +1680,19 @@
 
         input.addEventListener("change", () => {
           const selected = input.files && input.files[0];
-          if (!selected) {
-            return;
+          if (selected) {
+            useFile(selected);
           }
+        });
+        // A photo dragged onto the slot fills it; on an angle slot, any further photos become extra angles.
+        acceptDroppedFiles(picker, (files) => {
+          useFile(files[0]);
+          if (picker.closest(".angle-card")) {
+            addExtraAngles(files.slice(1));
+          }
+        });
 
+        function useFile(selected) {
           loadImageFile(selected, (candidateUrl, file) => {
             const previousUrl = previewUrl;
             previewUrl = candidateUrl;
@@ -1697,7 +1715,7 @@
           }, () => {
             input.value = "";
           });
-        });
+        }
         if (!imageNumber) {
           const numberBadge = document.createElement("span");
           numberBadge.className = "image-number";
@@ -1897,20 +1915,60 @@
         });
       }
 
+      function addExtraAngles(files) {
+        files.forEach((selected) => {
+          loadImageFile(selected, (previewUrl, file) => {
+            createExtraAngleSlot(file, previewUrl);
+            uploadStatus.textContent = `${file.name} added as Extra Angle ${extraAngleSlots.length}.`;
+          }, () => {});
+        });
+      }
+
       extraAngleInput.addEventListener("change", () => {
         const selected = extraAngleInput.files && extraAngleInput.files[0];
-        if (!selected) {
-          return;
+        if (selected) {
+          addExtraAngles([selected]);
         }
-
-        loadImageFile(selected, (previewUrl, file) => {
-          createExtraAngleSlot(file, previewUrl);
-          uploadStatus.textContent = `${file.name} added as Extra Angle ${extraAngleSlots.length}.`;
-          extraAngleInput.value = "";
-        }, () => {
-          extraAngleInput.value = "";
-        });
+        extraAngleInput.value = "";
       });
+      acceptDroppedFiles(addAngleButton, addExtraAngles);
+
+      // Lets an upload slot take photos dragged onto it from the computer.
+      function acceptDroppedFiles(target, onFiles) {
+        // Both must be cancelled for every browser to treat the slot as a drop target.
+        ["dragenter", "dragover"].forEach((type) => target.addEventListener(type, (event) => {
+          if (target.disabled || !Array.from(event.dataTransfer.types).includes("Files")) {
+            return;
+          }
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          target.classList.add("drag-over");
+        }));
+        target.addEventListener("dragleave", (event) => {
+          if (!target.contains(event.relatedTarget)) {
+            target.classList.remove("drag-over");
+          }
+        });
+        target.addEventListener("drop", (event) => {
+          target.classList.remove("drag-over");
+          if (target.disabled) {
+            return;
+          }
+          event.preventDefault();
+          const files = [...event.dataTransfer.files];
+          if (files.length > 0) {
+            onFiles(files);
+          }
+        });
+      }
+
+      // A photo dropped beside a slot would otherwise open in the tab and leave the page.
+      ["dragover", "drop"].forEach((type) => window.addEventListener(type, (event) => {
+        if (!event.defaultPrevented && event.dataTransfer && Array.from(event.dataTransfer.types).includes("Files")) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "none";
+        }
+      }));
 
       function updateLightboxTransform() {
         const maxPanX = Math.max(0, (lightboxFitWidth * lightboxZoom - lightboxViewport.clientWidth) / 2);

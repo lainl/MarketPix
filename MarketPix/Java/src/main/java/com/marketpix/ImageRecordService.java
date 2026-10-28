@@ -77,8 +77,8 @@ public class ImageRecordService {
             R2Client r2,
             OpenAiClient openAi,
             ObjectMapper objectMapper,
-            @Value("${openai.chat.model:gpt-5.4-mini}") String chatModel,
-            @Value("${marketpix.id.timezone:}") String timezone) {
+            @Value("${openai.chat.model}") String chatModel,
+            @Value("${marketpix.id.timezone}") String timezone) {
         this.r2 = r2;
         this.openAi = openAi;
         this.objectMapper = objectMapper;
@@ -221,6 +221,19 @@ public class ImageRecordService {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The saved record for " + id + " is unreadable.");
         }
         return item.imageCount();
+    }
+
+    /**
+     * Deletes a saved set from storage. The record goes first, so a set that is only partly deleted no
+     * longer shows in the gallery.
+     */
+    public void delete(String id) {
+        int count = imageCount(id);
+        r2.delete(id + "/record.json");
+        index.remove(id);
+        for (int index = 0; index < count; index++) {
+            r2.delete(id + "/" + JpegZipExporter.entryName(id, index));
+        }
     }
 
     private synchronized void refreshIndexIfStale() {

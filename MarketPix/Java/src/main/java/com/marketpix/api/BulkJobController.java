@@ -31,7 +31,7 @@ public class BulkJobController {
 
     public BulkJobController(
             BulkJobService bulkJobs,
-            @Value("${marketpix.background.enabled:true}") boolean backgroundEnabled) {
+            @Value("${marketpix.background.enabled}") boolean backgroundEnabled) {
         this.bulkJobs = bulkJobs;
         this.backgroundEnabled = backgroundEnabled;
     }

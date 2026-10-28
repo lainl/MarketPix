@@ -45,6 +45,7 @@ public class ImageJobService {
     private final JpegZipExporter exporter;
     private final ImageIdGenerator idGenerator;
     private final ImageRecordService records;
+    private final MaintenanceService maintenance;
     private final ConcurrentHashMap<UUID, ImageJob> jobs = new ConcurrentHashMap<>();
 
     public ImageJobService(
@@ -53,13 +54,25 @@ public class ImageJobService {
             ListingPhotoEditor editor,
             JpegZipExporter exporter,
             ImageIdGenerator idGenerator,
-            ImageRecordService records) {
+            ImageRecordService records,
+            MaintenanceService maintenance) {
         this.tempDirectory = tempDirectory;
         this.analysisService = analysisService;
         this.editor = editor;
         this.exporter = exporter;
         this.idGenerator = idGenerator;
         this.records = records;
+        this.maintenance = maintenance;
+    }
+
+    /**
+     * Jobs that are analyzing, editing or exporting right now; a deploy waits for these. A job waiting for
+     * the user to answer in chat is not counted, since nobody may come back to it.
+     */
+    public int activeJobs() {
+        return (int) jobs.values().stream()
+                .filter(job -> List.of("ANALYZING", "PROCESSING", "EXPORTING").contains(job.status))
+                .count();
     }
 
     public void createJob(
@@ -81,6 +94,7 @@ public class ImageJobService {
         String imageId = idGenerator.next();
         int uploadCount = uploads == null ? 0 : uploads.size();
         try {
+            maintenance.requireOpen();
             validateJobRequest(angles, uploads, background);
             emit(events, "VALIDATING", "Validating the uploaded images.", null, imageId, uploadCount, List.of(), null, null);
             Files.createDirectories(tempDirectory);
@@ -90,6 +104,8 @@ public class ImageJobService {
             Path backgroundPath = hasFile(background) ? storeBackground(background, jobDirectory) : null;
             job = new ImageJob(jobId, imageId, jobDirectory, images, backgroundPath);
             jobs.put(jobId, job);
+            LOGGER.info("Image job " + jobId + " (" + imageId + ") created with " + images.size() + " picture(s)"
+                    + (backgroundPath == null ? "." : " and a background scene."));
             analyze(job, userContext, events);
         } catch (Exception exception) {
             if (!(exception instanceof ResponseStatusException statusException)
@@ -119,6 +135,11 @@ public class ImageJobService {
             }
             if (!ready) {
                 emit(events, "WAITING_FOR_USER", "Please review the image warning and say “I'm ready” to continue.", job.id, job.imageId, job.images.size(), job.waitingWarnings, null, null);
+                return;
+            }
+            if (maintenance.isDraining()) {
+                emit(events, "WAITING_FOR_USER", "MarketPix is installing an update. Say “I'm ready” again in a few minutes.",
+                        job.id, job.imageId, job.images.size(), job.waitingWarnings, null, null);
                 return;
             }
             if (job.centralObjectUnclear) {
@@ -184,6 +205,7 @@ public class ImageJobService {
             job.centralObjectUnclear = true;
             job.waitingWarnings = centralObjectWarnings(job.analysis);
             job.status = "WAITING_FOR_USER";
+            LOGGER.info("Image job " + job.id + " is waiting for the user: the central object is unclear.");
             emit(events, "WAITING_FOR_USER",
                     "Please review the unclear image, add context in chat, or replace it before processing.",
                     job.id, job.imageId, job.images.size(), job.waitingWarnings, null, null);
@@ -257,6 +279,8 @@ public class ImageJobService {
                 }
             }
             job.status = "COMPLETE";
+            LOGGER.info("Image job " + job.id + " (" + job.imageId + ") complete: " + total + " picture(s), "
+                    + warnings.size() + " flagged, " + (stored ? "saved to cloud storage." : "not saved to cloud storage."));
 
             List<String> previewUrls = new ArrayList<>();
             for (int index = 0; index < total; index++) {
@@ -288,6 +312,8 @@ public class ImageJobService {
             if (!(exception instanceof ResponseStatusException statusException)
                     || statusException.getStatusCode().is5xxServerError()) {
                 LOGGER.log(Level.SEVERE, "Could not process image job " + job.id, exception);
+            } else {
+                LOGGER.warning("Image job " + job.id + " failed: " + statusException.getReason());
             }
             emitFailure(events, exception, job);
         } finally {

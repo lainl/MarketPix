@@ -62,20 +62,38 @@ public class ImagePlacementService {
             %s""";
 
     private final OpenAiClient openAi;
-    private final String model;
-    private final String size;
+    private final ImageSettings singleItem;
+    private final ImageSettings bulk;
 
+    /** The bulk settings default to the single-item ones; set them to run bulk edit on a cheaper model. */
     public ImagePlacementService(
             OpenAiClient openAi,
-            @Value("${openai.image.model:gpt-image-2.5-flare}") String model,
-            @Value("${openai.image.size:2048x2048}") String size) {
+            @Value("${openai.image.model}") String model,
+            @Value("${openai.image.size}") String size,
+            @Value("${openai.image.bulk-model}") String bulkModel,
+            @Value("${openai.image.bulk-size}") String bulkSize,
+            @Value("${openai.image.bulk-quality}") String bulkQuality) {
         this.openAi = openAi;
-        this.model = model;
-        this.size = size;
+        this.singleItem = new ImageSettings(model, size, "high");
+        this.bulk = new ImageSettings(
+                bulkModel.isBlank() ? model : bulkModel.trim(),
+                bulkSize.isBlank() ? size : bulkSize.trim(),
+                bulkQuality.isBlank() ? "high" : bulkQuality.trim());
     }
 
     /** Returns the finished listing photo; {@code background} may be null for a white studio backdrop. */
     public BufferedImage place(BufferedImage photo, BufferedImage background, String objectDescription, String angle) {
+        return place(photo, background, objectDescription, angle, singleItem);
+    }
+
+    /** As {@link #place}, with the bulk edit image settings ({@code openai.image.bulk-*}). */
+    public BufferedImage placeForBulk(BufferedImage photo, BufferedImage background, String objectDescription) {
+        return place(photo, background, objectDescription, null, bulk);
+    }
+
+    private BufferedImage place(
+            BufferedImage photo, BufferedImage background, String objectDescription, String angle,
+            ImageSettings settings) {
         String item = objectDescription == null || objectDescription.isBlank()
                 ? "the main object in the photo"
                 : objectDescription.trim();
@@ -94,7 +112,7 @@ public class ImagePlacementService {
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR, "Could not prepare an image for editing.", exception);
         }
-        return decode(request(references, prompt));
+        return decode(request(references, prompt, settings));
     }
 
     /** The slot the user picked is only a hint; the photo itself decides what the view looks like. */
@@ -107,17 +125,25 @@ public class ImagePlacementService {
                 + "; use that only as a hint and keep the view exactly as photographed.";
     }
 
-    private byte[] request(List<byte[]> references, String prompt) {
+    private byte[] request(List<byte[]> references, String prompt, ImageSettings settings) {
         try {
-            return openAi.editImage(model, references, prompt, size, Duration.ofMinutes(5), "image editing");
+            return edit(references, prompt, settings);
         } catch (ResponseStatusException exception) {
             if (exception.getStatusCode() != HttpStatus.SERVICE_UNAVAILABLE
                     && exception.getStatusCode() != HttpStatus.GATEWAY_TIMEOUT) {
                 throw exception;
             }
             LOGGER.log(Level.WARNING, "Retrying image edit after: " + exception.getReason());
-            return openAi.editImage(model, references, prompt, size, Duration.ofMinutes(5), "image editing");
+            return edit(references, prompt, settings);
         }
+    }
+
+    private byte[] edit(List<byte[]> references, String prompt, ImageSettings settings) {
+        return openAi.editImage(settings.model(), references, prompt, settings.size(), settings.quality(),
+                Duration.ofMinutes(5), "image editing");
+    }
+
+    private record ImageSettings(String model, String size, String quality) {
     }
 
     private static BufferedImage decode(byte[] png) {

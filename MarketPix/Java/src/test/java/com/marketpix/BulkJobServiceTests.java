@@ -1,5 +1,6 @@
 package com.marketpix;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.HttpStatus;
@@ -17,6 +18,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -85,8 +87,8 @@ class BulkJobServiceTests {
         assertEquals("Lot_photos_edited.zip", done.downloadFilename());
         assertTrue(done.message().contains("5 of 6 photos"));
         verify(analyzer, times(2)).analyze(anyList(), anyString());
-        verify(placement, times(2)).place(any(), any(), eq("toy truck"), any());
-        verify(placement, times(3)).place(any(), any(), eq("brass clock"), any());
+        verify(placement, times(2)).placeForBulk(any(), any(), eq("toy truck"));
+        verify(placement, times(3)).placeForBulk(any(), any(), eq("brass clock"));
 
         List<String> entries = new ArrayList<>();
         try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(service.getDownload(jobId)))) {
@@ -130,7 +132,78 @@ class BulkJobServiceTests {
         assertTrue(created.backgroundScene());
         assertEquals("COMPLETE", done.status());
         assertTrue(done.message().contains("into your background scene"), done.message());
-        verify(placement, times(2)).place(any(), notNull(), eq("toy truck"), any());
+        verify(placement, times(2)).placeForBulk(any(), notNull(), eq("toy truck"));
+    }
+
+    @Test
+    void savesPhotosAsIsWhenAiEditingIsOff() throws Exception {
+        DropboxClient dropbox = dropbox(List.of(file("8900_01.jpg"), file("8900_02.png")));
+        when(dropbox.downloadSharedFile(eq(LINK), anyString())).thenAnswer(invocation -> encoded("png"));
+        ImageAnalysisService analyzer = analyzer();
+        ImagePlacementService placement = placement();
+        BulkJobService service = service(dropbox, analyzer, placement, false);
+        BulkJobView created = service.create(LINK);
+        UUID jobId = UUID.fromString(created.jobId());
+
+        service.start(jobId);
+        BulkJobView done = awaitFinished(service, jobId);
+
+        assertEquals(0, created.estimatedCost(), 0.0001);
+        assertEquals("COMPLETE", done.status());
+        assertEquals(2, done.finished());
+        assertTrue(done.message().contains("saved as is"), done.message());
+        verify(analyzer, never()).analyze(anyList(), anyString());
+        verify(placement, never()).placeForBulk(any(), any(), any());
+    }
+
+    @Test
+    void aJobStoppedByARestartResumesWithoutEditingFinishedPhotosAgain() throws Exception {
+        DropboxClient dropbox = dropbox(List.of(file("8900_01.jpg"), file("8900_02.jpg")));
+        when(dropbox.downloadSharedFile(eq(LINK), anyString())).thenAnswer(invocation -> encoded("png"));
+        // Before the restart, the first edit finishes and the second hangs until MarketPix stops.
+        AtomicInteger editsBefore = new AtomicInteger();
+        ImagePlacementService placementBefore = mock(ImagePlacementService.class);
+        when(placementBefore.placeForBulk(any(), any(), any())).thenAnswer(invocation -> {
+            if (editsBefore.incrementAndGet() > 1) {
+                Thread.sleep(60_000);
+            }
+            return solid(64, 64, Color.GREEN);
+        });
+        BulkJobService before = service(dropbox, analyzer(), placementBefore);
+        UUID jobId = UUID.fromString(before.create(LINK).jobId());
+        before.start(jobId);
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
+        while (before.status(jobId).finished() < 1) {
+            assertTrue(Instant.now().isBefore(deadline), "the first photo did not finish");
+            Thread.sleep(20);
+        }
+        before.shutdown();
+
+        ImageAnalysisService analyzerAfter = analyzer();
+        ImagePlacementService placementAfter = placement();
+        BulkJobService after = service(dropbox, analyzerAfter, placementAfter);
+        assertEquals("PROCESSING", after.status(jobId).status());
+        after.resumeUnfinishedJobs();
+        BulkJobView done = awaitFinished(after, jobId);
+
+        assertEquals("COMPLETE", done.status());
+        assertEquals(2, done.finished());
+        assertEquals(0, done.failed());
+        verify(placementAfter, times(1)).placeForBulk(any(), any(), eq("toy truck"));
+        verify(analyzerAfter, never()).analyze(anyList(), anyString());
+    }
+
+    @Test
+    void newJobsAreRefusedWhileAnUpdateIsWaiting() {
+        MaintenanceService maintenance = new MaintenanceService();
+        BulkJobService service = new BulkJobService(tempDirectory, dropbox(List.of(file("8900_01.jpg"))), analyzer(),
+                new ListingPhotoEditor(analyzer(), placement()), new JpegZipExporter(), mock(ImageIdGenerator.class),
+                disabledRecords(), new ObjectMapper(), maintenance, 0.25, 0.02, 500, true);
+        maintenance.startDraining();
+
+        ResponseStatusException refused = assertThrows(ResponseStatusException.class, () -> service.create(LINK));
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, refused.getStatusCode());
     }
 
     @Test
@@ -193,8 +266,14 @@ class BulkJobServiceTests {
 
     private BulkJobService service(
             DropboxClient dropbox, ImageAnalysisService analyzer, ImagePlacementService placement) {
+        return service(dropbox, analyzer, placement, true);
+    }
+
+    private BulkJobService service(
+            DropboxClient dropbox, ImageAnalysisService analyzer, ImagePlacementService placement, boolean aiEditing) {
         return new BulkJobService(tempDirectory, dropbox, analyzer, new ListingPhotoEditor(analyzer, placement),
-                new JpegZipExporter(), mock(ImageIdGenerator.class), disabledRecords(), 0.25, 0.02, 500);
+                new JpegZipExporter(), mock(ImageIdGenerator.class), disabledRecords(), new ObjectMapper(),
+                new MaintenanceService(), 0.25, 0.02, 500, aiEditing);
     }
 
     /** Item 8900 is a toy truck; item 10000's photos look like different objects. */
@@ -223,7 +302,7 @@ class BulkJobServiceTests {
 
     private ImagePlacementService placement() {
         ImagePlacementService placement = mock(ImagePlacementService.class);
-        when(placement.place(any(), any(), any(), any())).thenAnswer(invocation -> solid(64, 64, Color.GREEN));
+        when(placement.placeForBulk(any(), any(), any())).thenAnswer(invocation -> solid(64, 64, Color.GREEN));
         return placement;
     }
 

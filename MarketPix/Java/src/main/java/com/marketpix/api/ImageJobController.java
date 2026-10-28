@@ -38,7 +38,7 @@ public class ImageJobController {
 
     public ImageJobController(
             ImageJobService jobService,
-            @Value("${marketpix.background.enabled:true}") boolean backgroundEnabled) {
+            @Value("${marketpix.background.enabled}") boolean backgroundEnabled) {
         this.jobService = jobService;
         this.backgroundEnabled = backgroundEnabled;
     }

@@ -46,7 +46,7 @@ public class ChatService {
             WebClient.Builder webClientBuilder,
             ObjectMapper objectMapper,
             ApiKeyConfiguration apiKeys,
-            @Value("${openai.chat.model:gpt-5.4-mini}") String model) {
+            @Value("${openai.chat.model}") String model) {
         this.objectMapper = objectMapper;
         this.webClient = webClientBuilder.baseUrl("https://api.openai.com").build();
         this.apiKey = apiKeys.getOpenAiApiKey();

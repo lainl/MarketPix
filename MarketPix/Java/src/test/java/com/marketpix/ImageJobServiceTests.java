@@ -318,7 +318,7 @@ class ImageJobServiceTests {
         when(ids.next()).thenReturn(ID);
         return new ImageJobService(
                 tempDirectory, analyzer, new ListingPhotoEditor(analyzer, placement), new JpegZipExporter(),
-                ids, records);
+                ids, records, new MaintenanceService());
     }
 
     private ImageAnalysisService analyzer() {

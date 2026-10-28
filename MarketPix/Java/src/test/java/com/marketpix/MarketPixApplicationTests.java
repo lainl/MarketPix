@@ -13,10 +13,10 @@ import java.util.UUID;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+// The tests use their own fake settings (src/test/resources/test.env) instead of the real .env.
+@SpringBootTest(properties = "spring.config.import=classpath:test.env[.properties]")
 @AutoConfigureMockMvc
 class MarketPixApplicationTests {
 
@@ -41,13 +41,18 @@ class MarketPixApplicationTests {
     }
 
     @Test
-    void railwayOriginCanCallTheApi() throws Exception {
-        mockMvc.perform(options("/api/chat/stream")
-                        .header("Origin", "https://marketpix-production.up.railway.app")
-                        .header("Access-Control-Request-Method", "POST")
-                        .header("Access-Control-Request-Headers", "content-type"))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Origin", "https://marketpix-production.up.railway.app"));
+    void theInternalStatusOnlyAnswersFromInsideTheMachine() throws Exception {
+        mockMvc.perform(get("/api/internal/status")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/internal/status").with(request -> {
+                    request.setRemoteAddr("203.0.113.7");
+                    return request;
+                }))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/internal/drain").with(request -> {
+                    request.setRemoteAddr("203.0.113.7");
+                    return request;
+                }))
+                .andExpect(status().isNotFound());
     }
 
     @Test

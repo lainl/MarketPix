@@ -3,6 +3,7 @@ package com.marketpix;
 import org.springframework.stereotype.Service;
 
 import java.awt.image.BufferedImage;
+import java.util.function.UnaryOperator;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -33,11 +34,24 @@ public class ListingPhotoEditor {
      */
     public EditedPhoto edit(
             BufferedImage original, BufferedImage background, String objectDescription, String angle, String label) {
+        return edit(original, objectDescription, label,
+                photo -> placementService.place(photo, background, objectDescription, angle));
+    }
+
+    /** As {@link #edit}, with the bulk edit image settings. */
+    public EditedPhoto editForBulk(
+            BufferedImage original, BufferedImage background, String objectDescription, String label) {
+        return edit(original, objectDescription, label,
+                photo -> placementService.placeForBulk(photo, background, objectDescription));
+    }
+
+    private EditedPhoto edit(
+            BufferedImage original, String objectDescription, String label, UnaryOperator<BufferedImage> place) {
         BufferedImage photo = ImageFiles.limitLongEdge(original, WORKING_EDGE);
         BufferedImage edited = null;
         String warning = null;
         for (int attempt = 1; attempt <= MAX_EDIT_ATTEMPTS; attempt++) {
-            edited = placementService.place(photo, background, objectDescription, angle);
+            edited = place.apply(photo);
             try {
                 ImageAnalysisService.DetailCheck check = analysisService.verifyDetails(photo, edited, objectDescription);
                 if (check.passed()) {

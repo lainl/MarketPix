@@ -55,9 +55,9 @@ public class R2Client {
 
     public R2Client(
             ApiKeyConfiguration apiKeys,
-            @Value("${r2.account-id:}") String accountId,
-            @Value("${r2.bucket:}") String bucket,
-            @Value("${r2.endpoint:}") String endpoint) {
+            @Value("${r2.account-id}") String accountId,
+            @Value("${r2.bucket}") String bucket,
+            @Value("${r2.endpoint}") String endpoint) {
         this.accessKeyId = apiKeys.getR2AccessKeyId();
         this.secretAccessKey = apiKeys.getR2SecretAccessKey();
         this.bucket = bucket.trim();
@@ -88,6 +88,14 @@ public class R2Client {
             throw failure("reading " + key, response);
         }
         return Optional.of(response.body());
+    }
+
+    /** Deletes one object; deleting one that does not exist also succeeds. */
+    public void delete(String key) {
+        HttpResponse<byte[]> response = send("DELETE", key, new byte[0], null);
+        if (response.statusCode() / 100 != 2 && response.statusCode() != 404) {
+            throw failure("deleting " + key, response);
+        }
     }
 
     /**
@@ -151,7 +159,7 @@ public class R2Client {
         if (contentType != null) {
             request.header("Content-Type", contentType);
         }
-        request.method(method, body.length == 0 && method.equals("GET")
+        request.method(method, body.length == 0 && !method.equals("PUT")
                 ? HttpRequest.BodyPublishers.noBody()
                 : HttpRequest.BodyPublishers.ofByteArray(body));
         try {

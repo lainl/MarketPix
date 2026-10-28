@@ -85,14 +85,14 @@ public class OpenAiClient {
      * Calls the image edit endpoint with one or more reference images (in order) and returns the
      * decoded PNG bytes of the first result.
      */
-    public byte[] editImage(
-            String model, List<byte[]> pngs, String prompt, String size, Duration timeout, String purpose) {
+    public byte[] editImage(String model, List<byte[]> pngs, String prompt, String size, String quality,
+                            Duration timeout, String purpose) {
         requireKey(purpose);
         MultipartBodyBuilder body = new MultipartBodyBuilder();
         body.part("model", model);
         body.part("prompt", prompt);
         body.part("size", size);
-        body.part("quality", "high");
+        body.part("quality", quality);
         body.part("background", "opaque");
         body.part("output_format", "png");
         body.part("n", "1");
@@ -146,7 +146,7 @@ public class OpenAiClient {
         if (apiKey.isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "OpenAI " + purpose + " is not configured. Set openai.api.key-file in application.properties.");
+                    "OpenAI " + purpose + " is not configured. Set OPENAI_API_KEY in the .env file.");
         }
     }
 

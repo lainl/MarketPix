@@ -1,0 +1,61 @@
+name: Test and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Deploy this commit, or go back to the release before the current one
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.event_name == 'push' || inputs.action == 'deploy'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Run the tests and build the app
+        working-directory: MarketPix/Java
+        run: |
+          mvn -B -ntp verify
+          cp target/marketpix-api-*.jar "$GITHUB_WORKSPACE/app.jar"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: marketpix-app
+          path: app.jar
+          retention-days: 7
+
+  deploy:
+    needs: test
+    runs-on: [self-hosted, marketpix]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: marketpix-app
+          path: build
+      - name: Deploy to the server
+        run: bash deploy/deploy.sh build/app.jar "${GITHUB_SHA::12}"
+
+  rollback:
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'rollback'
+    runs-on: [self-hosted, marketpix]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Go back to the previous release
+        run: bash deploy/rollback.sh

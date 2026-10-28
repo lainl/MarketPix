@@ -14,6 +14,5 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /src/target/marketpix-api-*.jar /app/app.jar
 COPY MarketPix/UserInterface /app/ui
-ENV MARKETPIX_UI_DIR=/app/ui
-EXPOSE 8000
+EXPOSE 3008
 CMD ["java", "-jar", "/app/app.jar"]

@@ -1,0 +1,33 @@
+{$MARKETPIX_SITE} {
+	@internal path /api/internal/*
+	respond @internal 404
+
+	reverse_proxy app:3008 {
+		flush_interval -1
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		format filter {
+			wrap console
+			request>uri query {
+				delete token
+			}
+		}
+	}
+}
+
+www.{$MARKETPIX_SITE} {
+	redir https://{$MARKETPIX_SITE}{uri} permanent
+}
+
+http://40.160.153.6 {
+	redir https://{$MARKETPIX_SITE}{uri} permanent
+}

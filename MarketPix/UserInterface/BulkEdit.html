@@ -388,6 +388,13 @@
         cursor: not-allowed;
       }
 
+      .image-picker.drag-over {
+        border-style: solid;
+        border-color: #313423;
+        background: rgba(243, 226, 150, 0.85);
+        box-shadow: 0 0 0 3px rgba(49, 52, 35, 0.25);
+      }
+
       .image-picker:focus-visible {
         outline: 3px solid #fff8d5;
         outline-offset: 3px;
@@ -925,18 +932,55 @@
         backgroundInput.click();
       });
 
-      backgroundInput.addEventListener("change", () => {
-        const file = backgroundInput.files && backgroundInput.files[0];
-        if (!file) {
-          return;
-        }
+      function chooseBackground(file) {
         if (!file.type.startsWith("image/") && !/\.(hei[cf]|hif|avif|tiff?|psd|jfif|webp|bmp)$/i.test(file.name)) {
           showMessage(`${file.name} is not an image. Choose a photo of the background scene.`, true);
           return;
         }
         showMessage("");
         showBackground(file);
+      }
+
+      backgroundInput.addEventListener("change", () => {
+        const file = backgroundInput.files && backgroundInput.files[0];
+        if (file) {
+          chooseBackground(file);
+        }
       });
+
+      // A photo dragged onto the background slot is used as the background.
+      // Both must be cancelled for every browser to treat the slot as a drop target.
+      ["dragenter", "dragover"].forEach((type) => backgroundPicker.addEventListener(type, (event) => {
+        if (backgroundPicker.disabled || !Array.from(event.dataTransfer.types).includes("Files")) {
+          return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        backgroundPicker.classList.add("drag-over");
+      }));
+      backgroundPicker.addEventListener("dragleave", (event) => {
+        if (!backgroundPicker.contains(event.relatedTarget)) {
+          backgroundPicker.classList.remove("drag-over");
+        }
+      });
+      backgroundPicker.addEventListener("drop", (event) => {
+        backgroundPicker.classList.remove("drag-over");
+        if (backgroundPicker.disabled) {
+          return;
+        }
+        event.preventDefault();
+        const file = event.dataTransfer.files[0];
+        if (file) {
+          chooseBackground(file);
+        }
+      });
+      // A photo dropped beside the slot would otherwise open in the tab and leave the page.
+      ["dragover", "drop"].forEach((type) => window.addEventListener(type, (event) => {
+        if (!event.defaultPrevented && event.dataTransfer && Array.from(event.dataTransfer.types).includes("Files")) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "none";
+        }
+      }));
 
       backgroundRemove.addEventListener("click", () => {
         showBackground(null);

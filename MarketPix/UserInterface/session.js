@@ -1,6 +1,6 @@
 // Shared by every page: where the API lives and the login session token it requires.
 const apiBaseUrl = window.location.protocol === "file:" || window.location.port === "5500"
-  ? "http://localhost:8000"
+  ? "http://localhost:3008"
   : window.location.origin;
 const sessionTokenKey = "marketpix.sessionToken";
 const sessionPages = ["Home.html", "BulkEdit.html", "Gallery.html"];

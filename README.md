@@ -17,23 +17,32 @@ The repository contains a Spring Boot API in `Java/` and the web interface in `U
 
 ## Configure
 
-Settings live in
-[`Java/src/main/resources/application.properties`](./Java/src/main/resources/application.properties).
-When `OPENAI_API_KEY` is set, that value is used. Otherwise the OpenAI key is read
-from `openai.api.key`, or from the file at `openai.api.key-file`.
+Copy `.env.example` to `.env` in the project root and fill in the values; the app reads that file when it
+starts, and git ignores it. Real environment variables (such as the ones you set on a host) win over `.env`.
+Every setting is read through
+[`application.properties`](./MarketPix/Java/src/main/resources/application.properties), which only names
+the settings and holds no values and no defaults. A setting missing from `.env` (and from the host's
+variables) stops the app at startup and names the missing variable. A setting you do not need still gets a
+line with an empty value, such as `DROPBOX_ACCESS_TOKEN=`; `.env.example` lists every one.
+
+The Default column below is what `.env.example` suggests, not something the app falls back to.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | | OpenAI key. Overrides the file settings below. |
-| `openai.api.key-file` | `C:/Dev/.secrets/openai-api-key` | File holding the OpenAI key, kept outside the repo. `openai.api.key` overrides it if set. |
+| `PORT` | `3008` | Port the app listens on. |
+| `MARKETPIX_UI_DIR` | `../UserInterface` | Folder the web pages are served from, relative to the `Java/` folder. |
+| `OPENAI_API_KEY` | | OpenAI key. |
 | `openai.image.model` (`OPENAI_IMAGE_MODEL`) | `gpt-image-2.5-flare` | Edits each photo onto the background, at `high` quality. `gpt-image-2.5-sunburst` costs the same and gives the same output but is slower. |
 | `openai.image.size` (`OPENAI_IMAGE_SIZE`) | `2048x2048` | Output size of each finished photo. |
+| `openai.image.bulk-model`, `.bulk-size`, `.bulk-quality` (`OPENAI_BULK_IMAGE_MODEL`, `OPENAI_BULK_IMAGE_SIZE`, `OPENAI_BULK_IMAGE_QUALITY`) | the single-item model and size, `high` | Image settings for bulk edit only, such as `gpt-image-1.5`, `1024x1024`, `medium` to make large folders cheaper. |
 | `r2.account-id`, `r2.bucket` (`R2_ACCOUNT_ID`, `R2_BUCKET`) | this account, `marketpix-images` | Cloudflare R2 account and bucket that finished images are saved to. |
-| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | | R2 S3 credentials. Overrides `r2.access-key-id` and `r2.secret-access-key`. Storage is off without them. |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | | R2 S3 credentials. Storage is off without them. |
 | `marketpix.id.timezone` (`MARKETPIX_ID_TIMEZONE`) | server zone | Time zone of the day and time inside each id. |
 | `openai.vision.model` (`OPENAI_VISION_MODEL`) | `gpt-5.5` | Checks the uploaded angles and compares every finished photo with its original. |
 | `openai.chat.model` (`OPENAI_CHAT_MODEL`) | `gpt-5.4-mini` | Model for the chat assistant. |
-| `marketpix.auth.username` / `.password` (`MARKETPIX_USERNAME` / `MARKETPIX_PASSWORD`) | `0` / `0` | The login for the web interface (demo values). |
+| `marketpix.auth.username` / `.password` (`MARKETPIX_USERNAME` / `MARKETPIX_PASSWORD`) | | The login for the web interface. |
+| `marketpix.auth.session-days` (`MARKETPIX_SESSION_DAYS`) | `30` | Days a login stays valid without use. |
+| `marketpix.auth.session-file` (`MARKETPIX_SESSION_FILE`) | | Private file that keeps logins across restarts (token hashes only). Empty keeps them in memory. |
 | `dropbox.app-key`, `dropbox.app-secret` (`DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`) | | The Dropbox app's key and secret for bulk edit. |
 | `dropbox.refresh-token` (`DROPBOX_REFRESH_TOKEN`) | | Long-lived Dropbox token; with it MarketPix renews access tokens itself. See [Bulk edit](#bulk-edit). |
 | `dropbox.access-token` (`DROPBOX_ACCESS_TOKEN`) | | A Dropbox access token, used only while no refresh token is set. It expires after about four hours. |
@@ -42,16 +51,54 @@ from `openai.api.key`, or from the file at `openai.api.key-file`.
 | `marketpix.bulk.cost-per-item` (`MARKETPIX_BULK_COST_PER_ITEM`) | `0.02` | Estimated USD per item for the object analysis, added to that estimate. |
 | `MARKETPIX_IMAGEMAGICK` | | Path to `magick` when it is not on the `PATH` or in `C:/Program Files/ImageMagick*`. |
 | `marketpix.bulk.max-photos` (`MARKETPIX_BULK_MAX_PHOTOS`) | `500` | The largest folder one bulk job accepts. |
+| `marketpix.bulk.ai-editing` (`MARKETPIX_BULK_AI_EDITING`) | `true` | `false` saves bulk photos as is (as JPEGs) without calling OpenAI, to test Dropbox and cloud storage for free. |
 
-Keep real keys out of source control. Set Dropbox credentials with the environment variables above.
+Keep real keys out of source control: they belong in `.env` (or the host's variables), nowhere else.
 
-## Host on Railway
+## Run with Docker
 
-`railway.toml` builds the root `Dockerfile`. The image serves `UserInterface/` and the API on
-Railway's `PORT`. Open `/` for the app and `/api/health` for the health check.
+The root `Dockerfile` builds an image that serves `UserInterface/` and the API on `PORT`. Open `/` for the
+app and `/api/health` for the health check.
 
-Set `OPENAI_API_KEY` on the service before the first deploy. See `.env.example` for the other
-optional variables.
+The image has no `.env` file, so pass yours when the container starts (`docker run --env-file .env ...`),
+with these two changed for the image:
+`MARKETPIX_UI_DIR=/app/ui` and `MARKETPIX_SESSION_FILE=/data/sessions.json` (mount a volume at `/data` to keep
+logins across deploys; leave it empty to keep them in memory). The app refuses to start if a variable is
+missing, and the log names it.
+
+## Deploy to the OVHcloud server
+
+The server (`ubuntu@40.160.153.6`) runs MarketPix at `https://marketpixs.site` in Docker behind Caddy, which
+gets and renews the HTTPS certificates itself (Let's Encrypt, with ZeroSSL as a fallback). `http://` and
+`www.marketpixs.site` redirect to `https://marketpixs.site`. Only ports 22, 80 and 443 are open; the app's port
+3008 is never published, and the app trusts Caddy's `X-Forwarded-*` headers only from private network addresses.
+The domain's DNS (Namecheap) needs an A record `@` → `40.160.153.6` and a CNAME `www` → `marketpixs.site`.
+
+Every push to `main` runs `.github/workflows/deploy.yml`: GitHub runs the tests and builds the app, then the
+self-hosted runner on the server runs `deploy/deploy.sh`. That script pauses new jobs, waits up to 30 minutes
+for running jobs to finish, starts the new release and checks its health. If the new release does not become
+healthy, it goes back to the previous one. To roll back by hand, run the workflow with the action `rollback`, or
+on the server: `sudo -u marketpix bash /opt/marketpix/runner/_work/MarketPix/MarketPix/deploy/rollback.sh`.
+No keys or passwords are stored on GitHub: the runner dials out to GitHub, and GitHub never logs in to the server.
+
+On the server:
+
+| Path | What it holds |
+| --- | --- |
+| `/opt/marketpix/.env` | The production settings, uploaded by hand (owner `marketpix`, mode `600`). Deploys never touch it. |
+| `/opt/marketpix/data/` | Saved logins and bulk-job progress. Kept across deploys. |
+| `/opt/marketpix/caddy/` | HTTPS certificates. |
+| `/opt/marketpix/stack/` | The Compose file, Caddyfile and the current release, written by each deploy. |
+
+Bulk jobs keep their progress in `/opt/marketpix/data/bulk-jobs`, so a job interrupted by a crash, reboot or a
+deploy that could not wait resumes on the next start without editing its finished photos again.
+
+Logs: `docker logs -f marketpix-app` (the app), `docker logs -f marketpix-caddy` (web traffic, without session
+tokens) and `journalctl -t marketpix-deploy` (deploys).
+
+First-time setup, in order: `deploy/server/1-install.sh` (Docker, updates, fail2ban, swap, folders),
+`2-firewall.sh`, then upload `.env`, then `3-runner.sh` (connects GitHub Actions) and, once key login is
+confirmed, `4-ssh-hardening.sh`.
 
 ## Run
 
@@ -61,16 +108,19 @@ From the `Java/` directory:
 mvn spring-boot:run
 ```
 
-The API starts at `http://localhost:8000` (`PORT` or `SERVER_PORT` overrides it) and also serves
-the interface at that address. Check it with `Invoke-RestMethod http://localhost:8000/api/health`,
-then open `http://localhost:8000`. Opening `UserInterface/Home.html` from disk, or through a Live
-Server on port 5500, still calls the API at `http://localhost:8000`.
+The API starts at `http://localhost:3008` (set by `PORT` in `.env`) and also serves
+the interface at that address. Check it with `Invoke-RestMethod http://localhost:3008/api/health`,
+then open `http://localhost:3008`. Opening `UserInterface/Home.html` from disk, or through a Live
+Server on port 5500, still calls the API at `http://localhost:3008`.
 
 ## Logging in
 
-Every page needs a login (the demo login is `0` / `0`). Logging in returns a session token that the
-pages keep in the browser and send with every API call. A session ends after 12 hours without use, on
-**Log out**, or when the server restarts. The **Single item** and **Bulk edit** tabs switch pages.
+Every page needs the login set by `MARKETPIX_USERNAME` and `MARKETPIX_PASSWORD`. Logging in returns a session token that the
+pages keep in the browser and send with every API call. A session ends after 30 days without use
+(`marketpix.auth.session-days`), on **Log out**, or when the username or password changes. Sessions survive
+restarts: the server keeps them in `marketpix.auth.session-file`, a private file in the server user's home
+folder that holds only hashes of the tokens. In Docker, keep that file on a mounted volume so deploys do not
+reset it. The **Single item** and **Bulk edit** tabs switch pages.
 
 ## Using it
 
@@ -191,6 +241,9 @@ GET requests may pass `?token=<token>` instead, so image previews and download l
   job that is waiting for the user.
 - `GET /api/images/jobs/{jobId}/images/{n}`: the nth finished JPEG.
 - `GET /api/images/jobs/{jobId}/download`: the ZIP.
+- `DELETE /api/images/records/{id}`: deletes a saved set (its record and JPEGs) from storage.
+- `GET /api/images/records/{id}/images/{n}`: the nth stored JPEG of a set; add `download=true` to save it as a file.
+- `GET /api/images/records/download?id=<id>&id=<id>...`: one ZIP of the selected sets, each in a folder named after its id.
 - `POST /api/images/records/{id}/tags` (JSON `{"description": "..."}`): turns the description into a tag array, saves it on the stored set and returns `{"id", "tags"}`.
 - `POST /api/chat/stream`: the chat assistant, which only helps explain context for an image job.
 - `POST /api/bulk/jobs` (JSON `{"dropboxUrl": "..."}`, or multipart with `dropboxUrl` and an optional

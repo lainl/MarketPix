@@ -53,11 +53,11 @@ public class DropboxClient {
     public DropboxClient(
             WebClient.Builder webClientBuilder,
             ObjectMapper objectMapper,
-            @Value("${dropbox.access-token:}") String accessToken,
-            @Value("${dropbox.refresh-token:}") String refreshToken,
-            @Value("${dropbox.app-key:}") String appKey,
-            @Value("${dropbox.app-secret:}") String appSecret,
-            @Value("${dropbox.account-email:marketpixs@gmail.com}") String accountEmail) {
+            @Value("${dropbox.access-token}") String accessToken,
+            @Value("${dropbox.refresh-token}") String refreshToken,
+            @Value("${dropbox.app-key}") String appKey,
+            @Value("${dropbox.app-secret}") String appSecret,
+            @Value("${dropbox.account-email}") String accountEmail) {
         this.webClient = webClientBuilder
                 .clientConnector(new ReactorClientHttpConnector(HttpClient.create().responseTimeout(TIMEOUT)))
                 .exchangeStrategies(ExchangeStrategies.builder()
