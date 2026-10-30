@@ -98,10 +98,17 @@ public class ImageRecordService {
      * One saved set as the gallery shows it. {@code createdAt} is when pictures were last saved to it, so a set
      * that gets more pictures moves to the top and is kept three months from then. {@code objectId} is the
      * item code the user typed in, or empty; the gallery shows it as the title and downloads are named after it.
+     * {@code revision} goes up whenever a picture is deleted and the rest move up a number, so links to the
+     * pictures change and browsers do not show the old picture from their cache.
      */
-    public record GalleryItem(String id, Instant createdAt, List<String> tags, int imageCount, String objectId) {
+    public record GalleryItem(
+            String id, Instant createdAt, List<String> tags, int imageCount, String objectId, int revision) {
+        public GalleryItem(String id, Instant createdAt, List<String> tags, int imageCount, String objectId) {
+            this(id, createdAt, tags, imageCount, objectId, 0);
+        }
+
         public GalleryItem(String id, Instant createdAt, List<String> tags, int imageCount) {
-            this(id, createdAt, tags, imageCount, "");
+            this(id, createdAt, tags, imageCount, "", 0);
         }
     }
 
@@ -394,6 +401,39 @@ public class ImageRecordService {
         }
     }
 
+    /**
+     * Deletes one picture from a set. The pictures after it move up one number, so the set stays numbered 1, 2,
+     * 3, ... without gaps; deleting the only picture deletes the set. Returns the set as it is now, or empty
+     * when the set was deleted.
+     */
+    public synchronized Optional<GalleryItem> deleteImage(String id, int number) {
+        if (!ImageIdGenerator.ID_PATTERN.matcher(id).matches()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "That picture was not found.");
+        }
+        ObjectNode record = readRecord(id);
+        int count = record.path("images").size();
+        if (number < 1 || number > count) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "That picture was not found.");
+        }
+        if (count == 1) {
+            delete(id);
+            return Optional.empty();
+        }
+        for (int moving = number + 1; moving <= count; moving++) {
+            r2.put(id + "/" + JpegZipExporter.entryName(id, moving - 2), image(id, moving), "image/jpeg");
+        }
+        ArrayNode images = record.putArray("images");
+        for (int index = 0; index < count - 1; index++) {
+            images.add(id + "/" + JpegZipExporter.entryName(id, index));
+        }
+        record.put("revision", record.path("revision").asInt(0) + 1);
+        putRecord(id, record);
+        indexRecord(record);
+        // The record no longer lists the last key, so a failure here only leaves an unused file behind.
+        r2.delete(id + "/" + JpegZipExporter.entryName(id, count - 1));
+        return Optional.ofNullable(index.get(id));
+    }
+
     private synchronized void refreshIndexIfStale() {
         Instant now = Instant.now();
         if (indexedAt != null && indexedAt.plus(INDEX_MAX_AGE).isAfter(now)) {
@@ -465,7 +505,7 @@ public class ImageRecordService {
         List<String> tags = new ArrayList<>();
         record.path("tags").forEach(tag -> tags.add(tag.asText()));
         return new GalleryItem(id, createdAt, List.copyOf(tags), record.path("images").size(),
-                record.path("objectId").asText(""));
+                record.path("objectId").asText(""), record.path("revision").asInt(0));
     }
 
     private List<String> formatTags(String description) {

@@ -148,6 +148,40 @@ class ImageRecordServiceTests {
         assertEquals(List.of("Clock"), merged.tags());
     }
 
+    @Test
+    void deletingOnePictureMovesTheRestUpANumber() {
+        R2Client r2 = mock(R2Client.class);
+        when(r2.isConfigured()).thenReturn(true);
+        String id = "101010102026A0001";
+        byte[] record = ("{\"id\":\"" + id + "\",\"createdAt\":\"2026-10-30T18:04:00Z\",\"tags\":[],\"images\":[\""
+                + id + "/" + id + "_01.jpg\",\"" + id + "/" + id + "_02.jpg\",\"" + id + "/" + id + "_03.jpg\"]}")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        when(r2.get(id + "/record.json")).thenReturn(Optional.of(record));
+        when(r2.get(id + "/" + id + "_03.jpg")).thenReturn(Optional.of(new byte[] {3}));
+        ImageRecordService service = new ImageRecordService(r2, null, new ObjectMapper(), "", "UTC");
+
+        ImageRecordService.GalleryItem item = service.deleteImage(id, 2).orElseThrow();
+
+        verify(r2).put(id + "/" + id + "_02.jpg", new byte[] {3}, "image/jpeg");
+        verify(r2).delete(id + "/" + id + "_03.jpg");
+        verify(r2, never()).delete(id + "/record.json");
+        assertEquals(2, item.imageCount());
+        assertEquals(1, item.revision());
+    }
+
+    @Test
+    void deletingTheOnlyPictureDeletesTheSet() {
+        R2Client r2 = mock(R2Client.class);
+        when(r2.isConfigured()).thenReturn(true);
+        Instant now = Instant.now();
+        when(r2.get("101010102026A0001/record.json")).thenReturn(Optional.of(record("101010102026A0001", now)));
+        ImageRecordService service = new ImageRecordService(r2, null, new ObjectMapper(), "", "UTC");
+
+        assertEquals(Optional.empty(), service.deleteImage("101010102026A0001", 1));
+        verify(r2).delete("101010102026A0001/record.json");
+        verify(r2).delete("101010102026A0001/101010102026A0001_01.jpg");
+    }
+
     private static byte[] record(String id, Instant createdAt) {
         return ("{\"id\":\"" + id + "\",\"createdAt\":\"" + createdAt + "\",\"tags\":[],\"images\":[\"" + id + "/" + id
                 + "_01.jpg\"]}").getBytes(java.nio.charset.StandardCharsets.UTF_8);

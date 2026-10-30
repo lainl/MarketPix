@@ -56,7 +56,7 @@ public class ImageRecordController {
     public static Map<String, Object> view(ImageRecordService.GalleryItem item) {
         List<String> imageUrls = new ArrayList<>();
         for (int number = 1; number <= item.imageCount(); number++) {
-            imageUrls.add("/api/images/records/" + item.id() + "/images/" + number);
+            imageUrls.add("/api/images/records/" + item.id() + "/images/" + number + "?v=" + item.revision());
         }
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("id", item.id());
@@ -99,6 +99,14 @@ public class ImageRecordController {
                 .contentType(MediaType.parseMediaType("application/zip"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + name + ".zip\"")
                 .body(body);
+    }
+
+    /** Deletes one picture; answers with the set as it is now, or {@code deleted: true} when none are left. */
+    @DeleteMapping("/{id}/images/{number}")
+    public Map<String, Object> deleteImage(@PathVariable String id, @PathVariable int number) {
+        return records.deleteImage(id, number)
+                .<Map<String, Object>>map(item -> Map.of("deleted", false, "item", view(item)))
+                .orElseGet(() -> Map.of("deleted", true));
     }
 
     @DeleteMapping("/{id}")
