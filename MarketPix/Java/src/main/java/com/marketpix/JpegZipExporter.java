@@ -48,6 +48,18 @@ public class JpegZipExporter {
         return zipPath;
     }
 
+    /**
+     * The name downloads use: the item code the user typed in, made safe for file names, or the image id
+     * when there is none.
+     */
+    public static String downloadName(String objectId, String imageId) {
+        if (objectId == null) {
+            return imageId;
+        }
+        String safe = objectId.trim().replaceAll("[^A-Za-z0-9._-]+", "_").replaceAll("^[._]+|[._]+$", "");
+        return safe.isEmpty() ? imageId : safe;
+    }
+
     public static String entryName(String imageId, int index) {
         return imageId + "_" + String.format("%02d", index + 1) + ".jpg";
     }

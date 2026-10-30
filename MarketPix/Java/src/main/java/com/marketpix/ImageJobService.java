@@ -194,7 +194,7 @@ public class ImageJobService {
     }
 
     public String getDownloadFilename(UUID jobId) {
-        return findJob(jobId).imageId + ".zip";
+        return findJob(jobId).downloadName() + ".zip";
     }
 
     public Path getPreview(UUID jobId, int imageNumber) {
@@ -207,7 +207,7 @@ public class ImageJobService {
     }
 
     public String getPreviewFilename(UUID jobId, int imageNumber) {
-        return JpegZipExporter.entryName(findJob(jobId).imageId, imageNumber - 1);
+        return JpegZipExporter.entryName(findJob(jobId).downloadName(), imageNumber - 1);
     }
 
     private void analyze(ImageJob job, String userContext, Consumer<ImageJobEvent> events) {
@@ -276,7 +276,7 @@ public class ImageJobService {
 
             job.status = "EXPORTING";
             emit(events, "EXPORTING", "Creating the ZIP archive.", job.id, job.imageId, total, List.of(), null, null);
-            job.zipPath = exporter.export(job.imageId, outputs, job.directory);
+            job.zipPath = exporter.export(job.downloadName(), outputs, job.directory);
             job.outputs = List.copyOf(outputs);
 
             boolean stored = false;
@@ -314,7 +314,7 @@ public class ImageJobService {
                 message += " Please review the flagged pictures before listing.";
             }
             emit(events, "COMPLETE", message, job.id, job.imageId, total, List.copyOf(warnings),
-                    "/api/images/jobs/" + job.id + "/download", job.imageId + ".zip", List.copyOf(previewUrls), stored);
+                    "/api/images/jobs/" + job.id + "/download", job.downloadName() + ".zip", List.copyOf(previewUrls), stored);
         } catch (IOException exception) {
             job.status = "FAILED";
             LOGGER.log(Level.SEVERE, "Could not read the background for image job " + job.id, exception);
@@ -580,6 +580,11 @@ public class ImageJobService {
         private volatile String status = "ANALYZING";
         private volatile boolean centralObjectUnclear;
         private volatile List<String> waitingWarnings = List.of();
+
+        /** Downloads are named after the item code the user typed in, or the image id without one. */
+        private String downloadName() {
+            return JpegZipExporter.downloadName(objectId, imageId);
+        }
 
         private ImageJob(UUID id, String imageId, Path directory, List<JobImage> images, Path backgroundPath) {
             this.id = id;

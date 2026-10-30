@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -17,6 +18,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Period;
+import java.time.ZonedDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -35,6 +38,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -58,6 +62,7 @@ public class ImageRecordService {
     private static final int MAX_KNOWN_TAGS = 300;
     private static final int INDEX_THREADS = 8;
     private static final Duration INDEX_MAX_AGE = Duration.ofMinutes(3);
+    private static final Period RETENTION = Period.ofMonths(3);
     private static final String TAG_PROMPT = """
             An auctioneer described an auction lot in their own words. Turn the description into short search
             tags: the kind of object (for example Chair), plus its notable colors, style, origin, era,
@@ -88,8 +93,10 @@ public class ImageRecordService {
         this.zone = timezone == null || timezone.isBlank() ? ZoneId.systemDefault() : ZoneId.of(timezone.trim());
     }
 
-    /** One saved set as the gallery shows it. */
-    /** {@code objectId} is the item id the user typed in, or empty; the gallery shows it as the title. */
+    /**
+     * One saved set as the gallery shows it. {@code objectId} is the item code the user typed in, or empty;
+     * the gallery shows it as the title and downloads are named after it.
+     */
     public record GalleryItem(String id, Instant createdAt, List<String> tags, int imageCount, String objectId) {
         public GalleryItem(String id, Instant createdAt, List<String> tags, int imageCount) {
             this(id, createdAt, tags, imageCount, "");
@@ -248,6 +255,44 @@ public class ImageRecordService {
                 .limit(MAX_KNOWN_TAGS)
                 .map(Map.Entry::getKey)
                 .toList();
+    }
+
+    /** The name a set downloads under: its item code when it has one, otherwise its id. */
+    public String downloadName(String id) {
+        return find(id).map(item -> JpegZipExporter.downloadName(item.objectId(), id)).orElse(id);
+    }
+
+    /**
+     * Saved sets are kept for three months. This runs ten minutes after start-up (deploys restart the
+     * server) and then once a day, so it costs one pass over the gallery index per day.
+     */
+    @Scheduled(initialDelay = 10, fixedDelay = 24 * 60, timeUnit = TimeUnit.MINUTES)
+    public void deleteExpiredSets() {
+        if (!r2.isConfigured()) {
+            return;
+        }
+        try {
+            refreshIndexIfStale();
+        } catch (RuntimeException exception) {
+            LOGGER.log(Level.WARNING, "Skipping the expired-set cleanup: the gallery could not be loaded", exception);
+            return;
+        }
+        Instant cutoff = ZonedDateTime.now(zone).minus(RETENTION).toInstant();
+        int deleted = 0;
+        for (GalleryItem item : List.copyOf(index.values())) {
+            if (!item.createdAt().isBefore(cutoff)) {
+                continue;
+            }
+            try {
+                delete(item.id());
+                deleted++;
+            } catch (RuntimeException exception) {
+                LOGGER.log(Level.WARNING, "Could not delete expired set " + item.id(), exception);
+            }
+        }
+        if (deleted > 0) {
+            LOGGER.info("Deleted " + deleted + " saved set(s) older than three months.");
+        }
     }
 
     /** One stored JPEG of a set; {@code number} starts at 1. */

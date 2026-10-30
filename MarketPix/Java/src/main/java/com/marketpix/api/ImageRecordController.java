@@ -78,18 +78,19 @@ public class ImageRecordController {
                 .contentType(MediaType.IMAGE_JPEG)
                 .cacheControl(CacheControl.maxAge(Duration.ofDays(30)).cachePrivate())
                 .header(HttpHeaders.CONTENT_DISPOSITION, (download ? "attachment" : "inline")
-                        + "; filename=\"" + JpegZipExporter.entryName(id, number - 1) + "\"")
+                        + "; filename=\"" + JpegZipExporter.entryName(records.downloadName(id), number - 1) + "\"")
                 .body(records.image(id, number));
     }
 
-    /** Zips a saved set straight from storage, named like the original download. */
+    /** Zips a saved set straight from storage, named after its item code when it has one, else its id. */
     @GetMapping("/{id}/download")
     public ResponseEntity<StreamingResponseBody> download(@PathVariable String id) {
         int count = records.imageCount(id);
+        String name = records.downloadName(id);
         StreamingResponseBody body = output -> {
             try (ZipOutputStream zip = new ZipOutputStream(output)) {
                 for (int number = 1; number <= count; number++) {
-                    zip.putNextEntry(new ZipEntry(JpegZipExporter.entryName(id, number - 1)));
+                    zip.putNextEntry(new ZipEntry(JpegZipExporter.entryName(name, number - 1)));
                     zip.write(records.image(id, number));
                     zip.closeEntry();
                 }
@@ -98,11 +99,14 @@ public class ImageRecordController {
         };
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/zip"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + id + ".zip\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + name + ".zip\"")
                 .body(body);
     }
 
-    /** Zips the selected sets into one download, each set in a folder named after its id. */
+    /**
+     * Zips the selected sets into one download, each set in a folder named like its own download. Two sets
+     * with the same item code get the image id added so neither overwrites the other.
+     */
     @GetMapping("/download")
     public ResponseEntity<StreamingResponseBody> downloadMany(@RequestParam("id") List<String> ids) {
         List<String> unique = ids.stream().distinct().toList();
@@ -111,14 +115,18 @@ public class ImageRecordController {
                     "Select between 1 and " + MAX_DOWNLOAD_SETS + " sets to download.");
         }
         Map<String, Integer> counts = new LinkedHashMap<>();
+        Map<String, String> names = new LinkedHashMap<>();
         for (String id : unique) {
             counts.put(id, records.imageCount(id));
+            String name = records.downloadName(id);
+            names.put(id, names.containsValue(name) ? name + "_" + id : name);
         }
         StreamingResponseBody body = output -> {
             try (ZipOutputStream zip = new ZipOutputStream(output)) {
                 for (Map.Entry<String, Integer> set : counts.entrySet()) {
+                    String name = names.get(set.getKey());
                     for (int number = 1; number <= set.getValue(); number++) {
-                        zip.putNextEntry(new ZipEntry(set.getKey() + "/" + JpegZipExporter.entryName(set.getKey(), number - 1)));
+                        zip.putNextEntry(new ZipEntry(name + "/" + JpegZipExporter.entryName(name, number - 1)));
                         zip.write(records.image(set.getKey(), number));
                         zip.closeEntry();
                     }

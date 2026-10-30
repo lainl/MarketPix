@@ -6,10 +6,16 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ImageRecordServiceTests {
 
@@ -85,6 +91,39 @@ class ImageRecordServiceTests {
                 """)).objectId());
         assertNull(ImageRecordService.toItem(mapper.readTree("{\"id\":\"nope\",\"createdAt\":\"2026-10-26T12:40:00Z\"}")));
         assertNull(ImageRecordService.toItem(mapper.readTree("{\"id\":\"261340102026J2378\"}")));
+    }
+
+    @Test
+    void namesDownloadsAfterTheItemCodeWhenThereIsOne() {
+        assertEquals("Lot-8900", JpegZipExporter.downloadName(" Lot-8900 ", "261340102026J2378"));
+        assertEquals("A_12_B", JpegZipExporter.downloadName("A/12 B", "261340102026J2378"));
+        assertEquals("261340102026J2378", JpegZipExporter.downloadName("", "261340102026J2378"));
+        assertEquals("261340102026J2378", JpegZipExporter.downloadName("../", "261340102026J2378"));
+        assertEquals("261340102026J2378", JpegZipExporter.downloadName(null, "261340102026J2378"));
+        assertEquals("Lot-8900_02.jpg", JpegZipExporter.entryName("Lot-8900", 1));
+    }
+
+    @Test
+    void deletesOnlySetsOlderThanThreeMonths() {
+        R2Client r2 = mock(R2Client.class);
+        when(r2.isConfigured()).thenReturn(true);
+        when(r2.listFolders()).thenReturn(List.of("101010102026A0001", "202020102026A0002"));
+        Instant old = Instant.now().minus(100, ChronoUnit.DAYS);
+        Instant recent = Instant.now().minus(10, ChronoUnit.DAYS);
+        when(r2.get("101010102026A0001/record.json")).thenReturn(Optional.of(record("101010102026A0001", old)));
+        when(r2.get("202020102026A0002/record.json")).thenReturn(Optional.of(record("202020102026A0002", recent)));
+        ImageRecordService service = new ImageRecordService(r2, null, new ObjectMapper(), "", "UTC");
+
+        service.deleteExpiredSets();
+
+        verify(r2).delete("101010102026A0001/record.json");
+        verify(r2).delete("101010102026A0001/101010102026A0001_01.jpg");
+        verify(r2, never()).delete("202020102026A0002/record.json");
+    }
+
+    private static byte[] record(String id, Instant createdAt) {
+        return ("{\"id\":\"" + id + "\",\"createdAt\":\"" + createdAt + "\",\"tags\":[],\"images\":[\"" + id + "/" + id
+                + "_01.jpg\"]}").getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     private static ImageRecordService.GalleryItem item(String id, String createdAt, String... tags) {
