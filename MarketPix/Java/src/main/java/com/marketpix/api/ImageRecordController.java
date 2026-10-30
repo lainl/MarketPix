@@ -5,7 +5,6 @@ import com.marketpix.JpegZipExporter;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -33,7 +32,6 @@ import java.util.zip.ZipOutputStream;
 @RequestMapping("/api/images/records")
 public class ImageRecordController {
 
-    private static final int MAX_DOWNLOAD_SETS = 200;
 
     private final ImageRecordService records;
 
@@ -100,43 +98,6 @@ public class ImageRecordController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/zip"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + name + ".zip\"")
-                .body(body);
-    }
-
-    /**
-     * Zips the selected sets into one download, each set in a folder named like its own download. Two sets
-     * with the same item code get the image id added so neither overwrites the other.
-     */
-    @GetMapping("/download")
-    public ResponseEntity<StreamingResponseBody> downloadMany(@RequestParam("id") List<String> ids) {
-        List<String> unique = ids.stream().distinct().toList();
-        if (unique.isEmpty() || unique.size() > MAX_DOWNLOAD_SETS) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Select between 1 and " + MAX_DOWNLOAD_SETS + " sets to download.");
-        }
-        Map<String, Integer> counts = new LinkedHashMap<>();
-        Map<String, String> names = new LinkedHashMap<>();
-        for (String id : unique) {
-            counts.put(id, records.imageCount(id));
-            String name = records.downloadName(id);
-            names.put(id, names.containsValue(name) ? name + "_" + id : name);
-        }
-        StreamingResponseBody body = output -> {
-            try (ZipOutputStream zip = new ZipOutputStream(output)) {
-                for (Map.Entry<String, Integer> set : counts.entrySet()) {
-                    String name = names.get(set.getKey());
-                    for (int number = 1; number <= set.getValue(); number++) {
-                        zip.putNextEntry(new ZipEntry(name + "/" + JpegZipExporter.entryName(name, number - 1)));
-                        zip.write(records.image(set.getKey(), number));
-                        zip.closeEntry();
-                    }
-                }
-                zip.finish();
-            }
-        };
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/zip"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"MarketPix_" + counts.size() + "_sets.zip\"")
                 .body(body);
     }
 

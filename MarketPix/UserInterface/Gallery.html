@@ -866,22 +866,52 @@
         }
       }
 
-      // A single photo downloads as its JPEG; more than one comes as one ZIP.
-      function downloadSelected() {
-        const items = [...selected.values()];
-        const photos = items.flatMap((item) => item.imageUrls);
-        const signed = new URL(withSessionToken(photos.length === 1
-          ? photos[0]
-          : `/api/images/records/download?${new URLSearchParams(items.map((item) => ["id", item.id]))}`));
-        if (photos.length === 1) {
-          signed.searchParams.set("download", "true");
+      // Named like the server names a set: its item code made safe for file names, or its image id.
+      function downloadBase(item) {
+        const safe = (item.objectId || "").trim().replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[._]+|[._]+$/g, "");
+        return safe || item.id;
+      }
+
+      // Every selected photo downloads as its own JPEG, no ZIP. Sets that share an item code are numbered on
+      // from each other in the order they were saved (410_01, 410_02, ...); sets without one keep their id.
+      async function downloadSelected() {
+        const items = [...selected.values()]
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+        const counters = new Map();
+        const files = items.flatMap((item) => {
+          const base = downloadBase(item);
+          const key = base.toLowerCase();
+          return item.imageUrls.map((url) => {
+            const number = (counters.get(key) || 0) + 1;
+            counters.set(key, number);
+            return { url, name: `${base}_${String(number).padStart(2, "0")}.jpg` };
+          });
+        });
+        setSelectionBusy(true);
+        showMessage(`Downloading ${files.length} ${files.length === 1 ? "photo" : "photos"}…`);
+        try {
+          for (const file of files) {
+            const response = await apiFetch(new URL(file.url, apiBaseUrl).toString());
+            if (!response.ok) {
+              throw new Error(`${file.name} could not be downloaded.`);
+            }
+            const objectUrl = URL.createObjectURL(await response.blob());
+            const link = document.createElement("a");
+            link.href = objectUrl;
+            link.download = file.name;
+            document.body.append(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+            // Browsers drop downloads that start too close together.
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
+          showMessage("");
+        } catch (error) {
+          showMessage(error.message, true);
+        } finally {
+          setSelectionBusy(false);
         }
-        const link = document.createElement("a");
-        link.href = signed.toString();
-        link.download = "";
-        document.body.append(link);
-        link.click();
-        link.remove();
       }
 
       // Clicking a tag on a set filters by it.
