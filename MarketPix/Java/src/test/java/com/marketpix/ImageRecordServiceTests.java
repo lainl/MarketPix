@@ -40,6 +40,17 @@ class ImageRecordServiceTests {
     }
 
     @Test
+    void findsASetByItsObjectIdWithoutItBeingATag() {
+        ImageRecordService.GalleryItem lamp = new ImageRecordService.GalleryItem(
+                "101010102026A0001", Instant.parse("2026-10-28T10:00:00Z"), List.of("Lamp"), 1, "Lot-8900");
+        ImageRecordService.GalleryPage page = ImageRecordService.filter(
+                List.of(RED_CHAIR, lamp), AMSTERDAM, null, null, List.of("lot-8900"), 0, 48);
+
+        assertEquals(List.of(lamp), page.items());
+        assertEquals(List.of(new ImageRecordService.TagCount("Lamp", 1)), page.tags());
+    }
+
+    @Test
     void datesAreInclusiveDaysInTheIdTimeZone() {
         // 23:30 UTC on 31 October is already 1 November in Amsterdam.
         assertEquals(List.of(VASE), ImageRecordService.filter(
@@ -69,6 +80,9 @@ class ImageRecordServiceTests {
 
         assertEquals(new ImageRecordService.GalleryItem(
                 "261340102026J2378", Instant.parse("2026-10-26T12:40:00Z"), List.of("Chair"), 2), item);
+        assertEquals("Lot-8900", ImageRecordService.toItem(mapper.readTree("""
+                {"id":"261340102026J2378","createdAt":"2026-10-26T12:40:00Z","tags":[],"objectId":"Lot-8900"}
+                """)).objectId());
         assertNull(ImageRecordService.toItem(mapper.readTree("{\"id\":\"nope\",\"createdAt\":\"2026-10-26T12:40:00Z\"}")));
         assertNull(ImageRecordService.toItem(mapper.readTree("{\"id\":\"261340102026J2378\"}")));
     }

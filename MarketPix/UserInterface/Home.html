@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Home</title>
-    <link rel="icon" href="data:,">
+    <link rel="icon" href="img/icon.ico" sizes="any">
     <script src="session.js"></script>
     <script>requireSession();</script>
     <style>
@@ -204,6 +204,14 @@
       .result-thumb:focus-visible {
         outline: 3px solid #57573e;
         outline-offset: 2px;
+      }
+
+      .saved-sets-link {
+        display: inline-block;
+        margin-top: 8px;
+        color: #313423;
+        font-size: 13px;
+        font-weight: 600;
       }
 
       .result-warnings {
@@ -869,7 +877,7 @@
         </div>
         </div>
         <h2 class="slot-heading">Angles <small>At least one picture required</small></h2>
-        <!-- Front first, then extra angles (added before the + button), then the side views. -->
+        <!-- Front, an extra-angle button, the quarter views, a second extra-angle button, then side flat and back. Extras are added before their button. -->
         <div class="angle-grid" id="angle-grid">
           <div class="angle-card">
             <button class="image-picker" type="button" aria-label="Upload front view" aria-haspopup="menu" aria-expanded="false">
@@ -910,6 +918,12 @@
             <input class="image-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose right quarter view image">
             <span class="angle-name">Right Quarter View</span>
           </div>
+          <button class="add-angle" type="button" id="add-angle-2" aria-label="Add extra angle">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <span>Extra angle</span>
+          </button>
           <div class="angle-card">
             <button class="image-picker" type="button" aria-label="Upload side flat view" aria-haspopup="menu" aria-expanded="false">
               <img class="sketch" src="img/Side_Flat.png" alt="Side flat sketch">
@@ -921,10 +935,22 @@
             <input class="image-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose side flat image">
             <span class="angle-name">Side Flat</span>
           </div>
+          <div class="angle-card">
+            <button class="image-picker" type="button" aria-label="Upload back view" aria-haspopup="menu" aria-expanded="false">
+              <img class="sketch" src="img/Back.png" alt="Back view sketch">
+              <span class="image-number" aria-hidden="true" hidden></span>
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <input class="image-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose back view image">
+            <span class="angle-name">Back</span>
+          </div>
         </div>
         <input class="image-file" id="extra-angle-file" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.psd" aria-label="Choose an extra angle image">
         <p class="visually-hidden" id="image-upload-status" role="status" aria-live="polite"></p>
         <div class="item-controls">
+          <input type="text" id="object-id" maxlength="40" autocomplete="off" placeholder="Object ID (optional)" aria-label="Object ID, shown as the title in the gallery">
           <button type="button" id="process-images">Process</button>
         </div>
       </section>
@@ -938,6 +964,7 @@
               <button class="chat-suggestion" type="button">The item is the brass clock, not the box behind it.</button>
               <button class="chat-suggestion" type="button">Extra Angle 1 shows the underside with the maker's mark.</button>
               <button class="chat-suggestion" type="button">How should I photograph glass or shiny items?</button>
+              <button class="chat-suggestion" type="button">Show me the chairs saved this week.</button>
             </div>
           </div>
           <div class="chat-messages" id="chat-messages"></div>
@@ -963,6 +990,8 @@
     <script>
       const angleGrid = document.querySelector("#angle-grid");
       const addAngleButton = document.querySelector("#add-angle");
+      const addAngleButtonAfterQuarters = document.querySelector("#add-angle-2");
+      const objectIdInput = document.querySelector("#object-id");
       const chatInput = document.querySelector(".chat-input");
       const chatEmptyState = document.querySelector("#chat-empty-state");
       const chatMessages = document.querySelector("#chat-messages");
@@ -1195,6 +1224,11 @@
             if (eventType === "error") {
               throw new Error(dataLines.join("\n") || "Chat response failed.");
             }
+            if (eventType === "photos") {
+              appendSavedSets(assistantMessage, JSON.parse(dataLines.join("\n")));
+              scrollChatIfFollowing();
+              return;
+            }
             if (dataLines.length > 0) {
               if (!hasStarted) {
                 assistantMessage.replaceChildren();
@@ -1252,7 +1286,7 @@
       }
 
       function setImageControlsDisabled(disabled) {
-        document.querySelectorAll(".image-picker, .image-file, #add-angle, #process-images")
+        document.querySelectorAll(".image-picker, .image-file, .add-angle, #object-id, #process-images")
           .forEach(control => {
             control.disabled = disabled;
           });
@@ -1378,6 +1412,45 @@
           grid.append(thumb);
         });
         message.append(grid);
+      }
+
+      // Saved sets the chat found: every photo of a single set, or one cover per set when there are several.
+      function appendSavedSets(message, result) {
+        const items = result.items || [];
+        if (items.length > 0) {
+          const grid = document.createElement("div");
+          grid.className = "result-grid";
+          const pictures = items.length === 1
+            ? items[0].imageUrls.map((url, index) => ({ url, id: items[0].id, number: index + 1, count: 1 }))
+            : items.map(item => ({ url: item.imageUrls[0], id: item.id, number: 1, count: item.imageUrls.length }));
+          pictures.filter(picture => picture.url).forEach(picture => {
+            const caption = `${picture.id}_${String(picture.number).padStart(2, "0")}.jpg`;
+            const fullUrl = withSessionToken(picture.url);
+            const thumb = document.createElement("button");
+            thumb.type = "button";
+            thumb.className = "result-thumb";
+            thumb.setAttribute("aria-label", `Open ${caption}`);
+            const image = document.createElement("img");
+            image.src = fullUrl;
+            image.alt = caption;
+            image.loading = "lazy";
+            const badge = document.createElement("span");
+            badge.textContent = items.length === 1
+              ? String(picture.number).padStart(2, "0")
+              : `${picture.id}${picture.count > 1 ? ` · ${picture.count}` : ""}`;
+            thumb.append(image, badge);
+            thumb.addEventListener("click", () => openImagePreview(fullUrl, caption, thumb));
+            grid.append(thumb);
+          });
+          message.append(grid);
+        }
+        if (result.galleryLink && result.total > 0) {
+          const link = document.createElement("a");
+          link.className = "saved-sets-link";
+          link.href = result.galleryLink;
+          link.textContent = result.total > items.length ? `See all ${result.total} in the Gallery` : "Open in the Gallery";
+          message.append(link);
+        }
       }
 
       async function streamImageJob(url, options) {
@@ -1725,7 +1798,7 @@
         }
       }
 
-      function createExtraAngleSlot(file, previewUrl) {
+      function createExtraAngleSlot(file, previewUrl, beforeButton) {
         const card = document.createElement("div");
         card.className = "angle-card extra-angle";
 
@@ -1788,8 +1861,11 @@
         });
 
         card.append(picker, input, label, removeButton);
-        angleGrid.insertBefore(card, addAngleButton);
+        angleGrid.insertBefore(card, beforeButton);
         extraAngleSlots.push(slot);
+        // Extra angles are numbered in the order the page shows them, whichever button added them.
+        extraAngleSlots.sort((a, b) =>
+          a.card.compareDocumentPosition(b.card) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
         imageRevision += 1;
         connectImagePicker(picker, {
           previewUrl,
@@ -1875,6 +1951,10 @@
           : null;
 
         const formData = new FormData();
+        const objectId = objectIdInput.value.trim();
+        if (objectId) {
+          formData.append("objectId", objectId);
+        }
         if (backgroundFile) {
           formData.append("background", backgroundFile, backgroundFile.name);
         }
@@ -1915,23 +1995,25 @@
         });
       }
 
-      function addExtraAngles(files) {
+      function addExtraAngles(files, beforeButton = addAngleButton) {
         files.forEach((selected) => {
           loadImageFile(selected, (previewUrl, file) => {
-            createExtraAngleSlot(file, previewUrl);
-            uploadStatus.textContent = `${file.name} added as Extra Angle ${extraAngleSlots.length}.`;
+            createExtraAngleSlot(file, previewUrl, beforeButton);
+            uploadStatus.textContent = `${file.name} added as an extra angle.`;
           }, () => {});
         });
       }
 
+      let extraAngleTarget = addAngleButton;
       extraAngleInput.addEventListener("change", () => {
         const selected = extraAngleInput.files && extraAngleInput.files[0];
         if (selected) {
-          addExtraAngles([selected]);
+          addExtraAngles([selected], extraAngleTarget);
         }
         extraAngleInput.value = "";
       });
-      acceptDroppedFiles(addAngleButton, addExtraAngles);
+      acceptDroppedFiles(addAngleButton, files => addExtraAngles(files, addAngleButton));
+      acceptDroppedFiles(addAngleButtonAfterQuarters, files => addExtraAngles(files, addAngleButtonAfterQuarters));
 
       // Lets an upload slot take photos dragged onto it from the computer.
       function acceptDroppedFiles(target, onFiles) {
@@ -2100,9 +2182,12 @@
 
       document.querySelectorAll(".image-picker").forEach(connectImagePicker);
 
-      addAngleButton.addEventListener("click", () => {
-        extraAngleInput.value = "";
-        extraAngleInput.click();
+      [addAngleButton, addAngleButtonAfterQuarters].forEach(button => {
+        button.addEventListener("click", () => {
+          extraAngleTarget = button;
+          extraAngleInput.value = "";
+          extraAngleInput.click();
+        });
       });
 
       processImagesButton.addEventListener("click", startImageJob);

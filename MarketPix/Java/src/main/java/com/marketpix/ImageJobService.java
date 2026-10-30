@@ -37,7 +37,7 @@ public class ImageJobService {
     private static final int MAX_IMAGES = 64;
     private static final int PARALLEL_IMAGES = 3;
     private static final List<String> STANDARD_ANGLES = List.of(
-            "Left Quarter View", "Right Quarter View", "Front", "Side Flat");
+            "Left Quarter View", "Right Quarter View", "Front", "Side Flat", "Back");
 
     private final Path tempDirectory;
     private final ImageAnalysisService analysisService;
@@ -89,6 +89,17 @@ public class ImageJobService {
             MultipartFile background,
             String userContext,
             Consumer<ImageJobEvent> events) {
+        createJob(angles, uploads, background, userContext, "", events);
+    }
+
+    /** {@code objectId} is optional; when filled in it is saved on the finished set and shown as its title. */
+    public void createJob(
+            List<String> angles,
+            List<MultipartFile> uploads,
+            MultipartFile background,
+            String userContext,
+            String objectId,
+            Consumer<ImageJobEvent> events) {
         ImageJob job = null;
         Path jobDirectory = null;
         String imageId = idGenerator.next();
@@ -103,6 +114,7 @@ public class ImageJobService {
             List<JobImage> images = storeImages(angles, uploads, jobDirectory);
             Path backgroundPath = hasFile(background) ? storeBackground(background, jobDirectory) : null;
             job = new ImageJob(jobId, imageId, jobDirectory, images, backgroundPath);
+            job.objectId = objectId == null ? "" : objectId.trim();
             jobs.put(jobId, job);
             LOGGER.info("Image job " + jobId + " (" + imageId + ") created with " + images.size() + " picture(s)"
                     + (backgroundPath == null ? "." : " and a background scene."));
@@ -271,7 +283,11 @@ public class ImageJobService {
             if (records.isEnabled()) {
                 emit(events, "EXPORTING", "Saving your images to cloud storage.", job.id, job.imageId, total, List.of(), null, null);
                 try {
-                    records.store(job.imageId, outputs);
+                    if (job.objectId.isEmpty()) {
+                        records.store(job.imageId, outputs);
+                    } else {
+                        records.store(job.imageId, outputs, job.objectId);
+                    }
                     stored = true;
                 } catch (RuntimeException exception) {
                     LOGGER.log(Level.WARNING, "Could not store image set " + job.imageId + " in cloud storage", exception);
@@ -364,7 +380,6 @@ public class ImageJobService {
         if (hasFile(background) && !mayBeImage(background)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The background must be an image.");
         }
-        int previousOrder = -1;
         for (int index = 0; index < uploads.size(); index++) {
             MultipartFile upload = uploads.get(index);
             if (upload.isEmpty()) {
@@ -375,21 +390,14 @@ public class ImageJobService {
                         HttpStatus.BAD_REQUEST,
                         "Picture " + (index + 1) + " must be an image.");
             }
-            int order = angleOrder(angles.get(index));
-            if (order < previousOrder) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Images must be submitted in visible slot order.");
-            }
-            previousOrder = order;
+            requireKnownAngle(angles.get(index));
         }
     }
 
-    private int angleOrder(String angle) {
-        int standardIndex = STANDARD_ANGLES.indexOf(angle);
-        if (standardIndex >= 0) {
-            return standardIndex;
-        }
-        if (angle != null && angle.matches("Extra Angle [1-9][0-9]*")) {
-            return STANDARD_ANGLES.size() + Integer.parseInt(angle.substring("Extra Angle ".length()));
+    /** Pictures arrive in the order the page shows its slots; only the label has to be one it knows. */
+    private void requireKnownAngle(String angle) {
+        if (STANDARD_ANGLES.contains(angle) || (angle != null && angle.matches("Extra Angle [1-9][0-9]*"))) {
+            return;
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "An uploaded image has an unknown angle label.");
     }
@@ -568,6 +576,7 @@ public class ImageJobService {
         private volatile ImageAnalysisService.ImageAnalysis analysis;
         private volatile Path zipPath;
         private volatile List<Path> outputs = List.of();
+        private volatile String objectId = "";
         private volatile String status = "ANALYZING";
         private volatile boolean centralObjectUnclear;
         private volatile List<String> waitingWarnings = List.of();

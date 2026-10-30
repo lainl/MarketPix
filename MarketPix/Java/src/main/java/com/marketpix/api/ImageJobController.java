@@ -48,10 +48,11 @@ public class ImageJobController {
             @RequestParam(value = "angle", required = false) List<String> angles,
             @RequestParam(value = "images", required = false) List<MultipartFile> images,
             @RequestParam(value = "background", required = false) MultipartFile background,
-            @RequestParam(value = "context", defaultValue = "") String context) {
+            @RequestParam(value = "context", defaultValue = "") String context,
+            @RequestParam(value = "objectId", defaultValue = "") String objectId) {
         // When background scenes are switched off, every picture goes on white.
         MultipartFile scene = backgroundEnabled ? background : null;
-        return stream(events -> jobService.createJob(angles, images, scene, context, events));
+        return stream(events -> jobService.createJob(angles, images, scene, context, objectId, events));
     }
 
     @PostMapping(

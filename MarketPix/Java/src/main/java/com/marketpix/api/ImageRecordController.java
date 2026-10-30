@@ -50,21 +50,24 @@ public class ImageRecordController {
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "48") int limit) {
         ImageRecordService.GalleryPage page = records.search(from, to, tags, offset, limit);
-        List<Map<String, Object>> items = new ArrayList<>();
-        for (ImageRecordService.GalleryItem item : page.items()) {
-            List<String> imageUrls = new ArrayList<>();
-            for (int number = 1; number <= item.imageCount(); number++) {
-                imageUrls.add("/api/images/records/" + item.id() + "/images/" + number);
-            }
-            Map<String, Object> view = new LinkedHashMap<>();
-            view.put("id", item.id());
-            view.put("createdAt", item.createdAt().toString());
-            view.put("tags", item.tags());
-            view.put("imageUrls", imageUrls);
-            view.put("downloadUrl", "/api/images/records/" + item.id() + "/download");
-            items.add(view);
+        return Map.of("items", page.items().stream().map(ImageRecordController::view).toList(),
+                "total", page.total(), "tags", page.tags());
+    }
+
+    /** A saved set as the pages show it, with the links to its pictures and its ZIP. */
+    public static Map<String, Object> view(ImageRecordService.GalleryItem item) {
+        List<String> imageUrls = new ArrayList<>();
+        for (int number = 1; number <= item.imageCount(); number++) {
+            imageUrls.add("/api/images/records/" + item.id() + "/images/" + number);
         }
-        return Map.of("items", items, "total", page.total(), "tags", page.tags());
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("id", item.id());
+        view.put("objectId", item.objectId());
+        view.put("createdAt", item.createdAt().toString());
+        view.put("tags", item.tags());
+        view.put("imageUrls", imageUrls);
+        view.put("downloadUrl", "/api/images/records/" + item.id() + "/download");
+        return view;
     }
 
     /** Stored pictures never change, so the browser may keep them. */

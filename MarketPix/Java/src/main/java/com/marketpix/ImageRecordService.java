@@ -28,6 +28,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -54,6 +55,7 @@ public class ImageRecordService {
     private static final int MAX_TAG_LENGTH = 40;
     private static final int MAX_PAGE_SIZE = 200;
     private static final int MAX_TAG_FACETS = 60;
+    private static final int MAX_KNOWN_TAGS = 300;
     private static final int INDEX_THREADS = 8;
     private static final Duration INDEX_MAX_AGE = Duration.ofMinutes(3);
     private static final String TAG_PROMPT = """
@@ -87,7 +89,11 @@ public class ImageRecordService {
     }
 
     /** One saved set as the gallery shows it. */
-    public record GalleryItem(String id, Instant createdAt, List<String> tags, int imageCount) {
+    /** {@code objectId} is the item id the user typed in, or empty; the gallery shows it as the title. */
+    public record GalleryItem(String id, Instant createdAt, List<String> tags, int imageCount, String objectId) {
+        public GalleryItem(String id, Instant createdAt, List<String> tags, int imageCount) {
+            this(id, createdAt, tags, imageCount, "");
+        }
     }
 
     public record TagCount(String tag, int count) {
@@ -103,6 +109,14 @@ public class ImageRecordService {
 
     /** Uploads the finished JPEGs and a record with no tags yet. Callers check {@link #isEnabled()} first. */
     public void store(String id, List<Path> jpegs) {
+        store(id, jpegs, null);
+    }
+
+    /**
+     * As {@link #store(String, List)}, with the object id the user typed in. It is saved as its own field,
+     * not a tag, and a gallery search for it still finds the set.
+     */
+    public void store(String id, List<Path> jpegs, String objectId) {
         List<String> keys = new ArrayList<>();
         for (int index = 0; index < jpegs.size(); index++) {
             String key = id + "/" + JpegZipExporter.entryName(id, index);
@@ -118,6 +132,10 @@ public class ImageRecordService {
         record.put("id", id);
         record.put("createdAt", Instant.now().toString());
         record.putArray("tags");
+        String cleanObjectId = cleanObjectId(objectId);
+        if (!cleanObjectId.isEmpty()) {
+            record.put("objectId", cleanObjectId);
+        }
         ArrayNode images = record.putArray("images");
         keys.forEach(images::add);
         putRecord(id, record);
@@ -178,6 +196,10 @@ public class ImageRecordService {
             }
             Set<String> itemTags = new HashSet<>();
             item.tags().forEach(tag -> itemTags.add(tag.toLowerCase(Locale.ROOT)));
+            // The object id is not a tag, but searching for it in the tag box should still find the set.
+            if (!item.objectId().isEmpty()) {
+                itemTags.add(item.objectId().toLowerCase(Locale.ROOT));
+            }
             if (itemTags.containsAll(wanted)) {
                 matches.add(item);
             }
@@ -197,6 +219,35 @@ public class ImageRecordService {
         int start = Math.min(Math.max(offset, 0), matches.size());
         int end = Math.min(start + Math.min(Math.max(limit, 1), MAX_PAGE_SIZE), matches.size());
         return new GalleryPage(List.copyOf(matches.subList(start, end)), matches.size(), facets);
+    }
+
+    /** The saved set with exactly this id, if there is one. */
+    public Optional<GalleryItem> find(String id) {
+        if (id == null || !ImageIdGenerator.ID_PATTERN.matcher(id).matches() || !r2.isConfigured()) {
+            return Optional.empty();
+        }
+        refreshIndexIfStale();
+        if (!index.containsKey(id)) {
+            loadIntoIndex(id);
+        }
+        return Optional.ofNullable(index.get(id));
+    }
+
+    /** Every tag on a saved set, most used first, so a search can be matched against real tags. */
+    public List<String> knownTags() {
+        if (!r2.isConfigured()) {
+            return List.of();
+        }
+        refreshIndexIfStale();
+        Map<String, Integer> counts = new HashMap<>();
+        for (GalleryItem item : index.values()) {
+            item.tags().forEach(tag -> counts.merge(tag, 1, Integer::sum));
+        }
+        return counts.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
+                .limit(MAX_KNOWN_TAGS)
+                .map(Map.Entry::getKey)
+                .toList();
     }
 
     /** One stored JPEG of a set; {@code number} starts at 1. */
@@ -303,7 +354,8 @@ public class ImageRecordService {
         }
         List<String> tags = new ArrayList<>();
         record.path("tags").forEach(tag -> tags.add(tag.asText()));
-        return new GalleryItem(id, createdAt, List.copyOf(tags), record.path("images").size());
+        return new GalleryItem(id, createdAt, List.copyOf(tags), record.path("images").size(),
+                record.path("objectId").asText(""));
     }
 
     private List<String> formatTags(String description) {
@@ -331,6 +383,15 @@ public class ImageRecordService {
             }
         }
         return List.copyOf(unique);
+    }
+
+    /** The object id as it is saved: trimmed and kept as typed; empty when blank or too long. */
+    static String cleanObjectId(String objectId) {
+        if (objectId == null) {
+            return "";
+        }
+        String trimmed = objectId.trim();
+        return trimmed.length() <= MAX_TAG_LENGTH ? trimmed : "";
     }
 
     private static String titleCase(String text) {

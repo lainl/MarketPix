@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Gallery</title>
-    <link rel="icon" href="data:,">
+    <link rel="icon" href="img/icon.ico" sizes="any">
     <script src="session.js"></script>
     <script>requireSession();</script>
     <style>
@@ -593,7 +593,7 @@
           <span class="row-label">Showing sets tagged with all of:</span>
         </div>
         <div class="chip-row" id="tag-facets" hidden>
-          <span class="row-label">Tags in these results:</span>
+          <span class="row-label">Example tags (there are more, use the tag box):</span>
         </div>
         <p class="gallery-message" id="gallery-message" role="status" aria-live="polite"></p>
       </section>
@@ -724,7 +724,8 @@
 
       function renderFacets(facets) {
         facetRow.querySelectorAll(".chip").forEach((element) => element.remove());
-        const unused = facets.filter((facet) => !selectedTags.some((tag) => sameTag(tag, facet.tag)));
+        // Only the five most used are offered as examples; the tag box finds the rest.
+        const unused = facets.filter((facet) => !selectedTags.some((tag) => sameTag(tag, facet.tag))).slice(0, 5);
         unused.forEach((facet) => {
           const button = chip(facet.tag, { count: facet.count, title: `Only show sets tagged ${facet.tag} (${facet.count})` });
           button.addEventListener("click", () => {
@@ -807,7 +808,8 @@
         body.className = "card-body";
         const id = document.createElement("p");
         id.className = "card-id";
-        id.textContent = item.id;
+        id.textContent = item.objectId || item.id;
+        id.title = item.id;
         const date = document.createElement("p");
         date.className = "card-date";
         date.textContent = dateFormat.format(new Date(item.createdAt))
@@ -911,7 +913,8 @@
       }
 
       function openSet(item) {
-        document.querySelector("#set-title").textContent = item.id;
+        // The item id the user typed in reads better than the long image id; sets without one keep the image id.
+        document.querySelector("#set-title").textContent = item.objectId || item.id;
         document.querySelector("#set-date").textContent = dateFormat.format(new Date(item.createdAt));
         document.querySelector("#set-tags").replaceWith(Object.assign(renderItemTags(item.tags), { id: "set-tags" }));
         document.querySelector("#set-images").replaceChildren(...item.imageUrls.map((url, index) => {
