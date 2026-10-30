@@ -63,6 +63,7 @@ public class ImageRecordService {
     private static final int INDEX_THREADS = 8;
     private static final Duration INDEX_MAX_AGE = Duration.ofMinutes(3);
     private static final Period RETENTION = Period.ofMonths(3);
+    private static final int MAX_SET_IMAGES = 99;
     private static final String TAG_PROMPT = """
             An auctioneer described an auction lot in their own words. Turn the description into short search
             tags: the kind of object (for example Chair), plus its notable colors, style, origin, era,
@@ -94,13 +95,18 @@ public class ImageRecordService {
     }
 
     /**
-     * One saved set as the gallery shows it. {@code objectId} is the item code the user typed in, or empty;
-     * the gallery shows it as the title and downloads are named after it.
+     * One saved set as the gallery shows it. {@code createdAt} is when pictures were last saved to it, so a set
+     * that gets more pictures moves to the top and is kept three months from then. {@code objectId} is the
+     * item code the user typed in, or empty; the gallery shows it as the title and downloads are named after it.
      */
     public record GalleryItem(String id, Instant createdAt, List<String> tags, int imageCount, String objectId) {
         public GalleryItem(String id, Instant createdAt, List<String> tags, int imageCount) {
             this(id, createdAt, tags, imageCount, "");
         }
+    }
+
+    /** Where pictures were saved: the set's id and the number of the first new picture (1 for a new set). */
+    public record StoredSet(String id, int firstNumber) {
     }
 
     public record TagCount(String tag, int count) {
@@ -115,18 +121,71 @@ public class ImageRecordService {
     }
 
     /** Uploads the finished JPEGs and a record with no tags yet. Callers check {@link #isEnabled()} first. */
-    public void store(String id, List<Path> jpegs) {
-        store(id, jpegs, null);
+    public StoredSet store(String id, List<Path> jpegs) {
+        return store(id, jpegs, null);
     }
 
     /**
-     * As {@link #store(String, List)}, with the object id the user typed in. It is saved as its own field,
-     * not a tag, and a gallery search for it still finds the set.
+     * As {@link #store(String, List)}, with the item code the user typed in. It is saved as its own field, not
+     * a tag, and a gallery search for it still finds the set. When a saved set already has this item code, the
+     * pictures are added to that set instead and {@code id} is not used.
      */
-    public void store(String id, List<Path> jpegs, String objectId) {
+    public synchronized StoredSet store(String id, List<Path> jpegs, String objectId) {
+        String cleanObjectId = cleanObjectId(objectId);
+        Optional<GalleryItem> existing = setWithObjectId(cleanObjectId);
+        if (existing.isPresent() && existing.get().imageCount() + jpegs.size() <= MAX_SET_IMAGES) {
+            return append(existing.get().id(), jpegs);
+        }
+        List<String> keys = upload(id, 0, jpegs);
+        ObjectNode record = objectMapper.createObjectNode();
+        record.put("id", id);
+        record.put("createdAt", Instant.now().toString());
+        record.putArray("tags");
+        if (!cleanObjectId.isEmpty()) {
+            record.put("objectId", cleanObjectId);
+        }
+        ArrayNode images = record.putArray("images");
+        keys.forEach(images::add);
+        putRecord(id, record);
+        indexRecord(record);
+        return new StoredSet(id, 1);
+    }
+
+    /** The oldest saved set with this item code (ignoring case), if any. */
+    private Optional<GalleryItem> setWithObjectId(String objectId) {
+        if (objectId.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            refreshIndexIfStale();
+        } catch (RuntimeException exception) {
+            LOGGER.log(Level.WARNING, "Could not look for a saved set with item code " + objectId
+                    + "; saving the pictures as a new set", exception);
+            return Optional.empty();
+        }
+        return index.values().stream()
+                .filter(item -> item.objectId().equalsIgnoreCase(objectId))
+                .min(Comparator.comparing(GalleryItem::createdAt).thenComparing(GalleryItem::id));
+    }
+
+    /** Adds pictures to the end of a saved set, numbered on from its last one. */
+    private StoredSet append(String id, List<Path> jpegs) {
+        ObjectNode record = readRecord(id);
+        int start = record.path("images").size();
+        List<String> keys = upload(id, start, jpegs);
+        ArrayNode images = record.withArray("images");
+        keys.forEach(images::add);
+        record.put("updatedAt", Instant.now().toString());
+        putRecord(id, record);
+        indexRecord(record);
+        return new StoredSet(id, start + 1);
+    }
+
+    /** Uploads JPEGs as pictures {@code start + 1, start + 2, ...} of a set and returns their keys. */
+    private List<String> upload(String id, int start, List<Path> jpegs) {
         List<String> keys = new ArrayList<>();
         for (int index = 0; index < jpegs.size(); index++) {
-            String key = id + "/" + JpegZipExporter.entryName(id, index);
+            String key = id + "/" + JpegZipExporter.entryName(id, start + index);
             try {
                 r2.put(key, Files.readAllBytes(jpegs.get(index)), "image/jpeg");
             } catch (IOException exception) {
@@ -135,21 +194,14 @@ public class ImageRecordService {
             }
             keys.add(key);
         }
-        ObjectNode record = objectMapper.createObjectNode();
-        record.put("id", id);
-        record.put("createdAt", Instant.now().toString());
-        record.putArray("tags");
-        String cleanObjectId = cleanObjectId(objectId);
-        if (!cleanObjectId.isEmpty()) {
-            record.put("objectId", cleanObjectId);
-        }
-        ArrayNode images = record.putArray("images");
-        keys.forEach(images::add);
-        putRecord(id, record);
-        indexRecord(record);
+        return keys;
     }
 
-    /** Turns the user's free-text description into tags and saves them on the record. */
+    /**
+     * Turns the user's free-text description into tags and adds them to the set's tags, so a set that got
+     * more pictures keeps the tags from earlier descriptions. Returns every tag on the set, or an empty list
+     * when the description held none (nothing is saved then).
+     */
     public List<String> updateTags(String id, String description) {
         if (!ImageIdGenerator.ID_PATTERN.matcher(id).matches()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "That is not a valid image id.");
@@ -161,12 +213,22 @@ public class ImageRecordService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Cloud image storage is not configured.");
         }
         ObjectNode record = readRecord(id);
-        List<String> tags = formatTags(description.trim());
+        List<String> newTags = formatTags(description.trim());
+        if (newTags.isEmpty()) {
+            return newTags;
+        }
+        List<String> tags = new ArrayList<>();
+        record.path("tags").forEach(tag -> tags.add(tag.asText()));
+        for (String tag : newTags) {
+            if (tags.size() < MAX_TAGS && tags.stream().noneMatch(known -> known.equalsIgnoreCase(tag))) {
+                tags.add(tag);
+            }
+        }
         ArrayNode array = record.putArray("tags");
         tags.forEach(array::add);
         putRecord(id, record);
         indexRecord(record);
-        return tags;
+        return List.copyOf(tags);
     }
 
     /**
@@ -393,7 +455,10 @@ public class ImageRecordService {
         }
         Instant createdAt;
         try {
-            createdAt = Instant.parse(record.path("createdAt").asText(""));
+            // A set that got more pictures counts from then on.
+            createdAt = Instant.parse(record.hasNonNull("updatedAt")
+                    ? record.path("updatedAt").asText()
+                    : record.path("createdAt").asText(""));
         } catch (DateTimeParseException exception) {
             return null;
         }

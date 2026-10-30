@@ -271,7 +271,7 @@ class ImageJobServiceTests {
         assertEquals(ID, complete.imageId());
         assertTrue(complete.stored());
         assertTrue(complete.message().contains("Saved as " + ID));
-        verify(records).store(eq(ID), anyList());
+        verify(records).store(eq(ID), anyList(), anyString());
     }
 
     @Test
@@ -281,7 +281,7 @@ class ImageJobServiceTests {
         ImageRecordService records = mock(ImageRecordService.class);
         when(records.isEnabled()).thenReturn(true);
         org.mockito.Mockito.doThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "down"))
-                .when(records).store(anyString(), anyList());
+                .when(records).store(anyString(), anyList(), anyString());
         ImageJobService service = service(analyzer, placement(), records);
         List<ImageJobEvent> events = new ArrayList<>();
 

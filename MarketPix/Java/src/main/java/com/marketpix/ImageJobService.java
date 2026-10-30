@@ -207,7 +207,8 @@ public class ImageJobService {
     }
 
     public String getPreviewFilename(UUID jobId, int imageNumber) {
-        return JpegZipExporter.entryName(findJob(jobId).downloadName(), imageNumber - 1);
+        ImageJob job = findJob(jobId);
+        return JpegZipExporter.entryName(job.downloadName(), job.firstNumber - 1 + imageNumber - 1);
     }
 
     private void analyze(ImageJob job, String userContext, Consumer<ImageJobEvent> events) {
@@ -275,18 +276,16 @@ public class ImageJobService {
             }
 
             job.status = "EXPORTING";
-            emit(events, "EXPORTING", "Creating the ZIP archive.", job.id, job.imageId, total, List.of(), null, null);
-            job.zipPath = exporter.export(job.downloadName(), outputs, job.directory);
-            job.outputs = List.copyOf(outputs);
-
+            // Saved first: when the item code already has a set, the pictures join it and the ZIP is numbered on
+            // from that set's last picture.
             boolean stored = false;
             if (records.isEnabled()) {
                 emit(events, "EXPORTING", "Saving your images to cloud storage.", job.id, job.imageId, total, List.of(), null, null);
                 try {
-                    if (job.objectId.isEmpty()) {
-                        records.store(job.imageId, outputs);
-                    } else {
-                        records.store(job.imageId, outputs, job.objectId);
+                    ImageRecordService.StoredSet set = records.store(job.imageId, outputs, job.objectId);
+                    if (set != null) {
+                        job.savedId = set.id();
+                        job.firstNumber = set.firstNumber();
                     }
                     stored = true;
                 } catch (RuntimeException exception) {
@@ -294,6 +293,13 @@ public class ImageJobService {
                     warnings.add("Cloud storage: these pictures could not be saved online, so download the ZIP now.");
                 }
             }
+            emit(events, "EXPORTING", "Creating the ZIP archive.", job.id, job.imageId, total, List.of(), null, null);
+            List<String> entryNames = new ArrayList<>();
+            for (int index = 0; index < outputs.size(); index++) {
+                entryNames.add(JpegZipExporter.entryName(job.downloadName(), job.firstNumber - 1 + index));
+            }
+            job.zipPath = exporter.export(job.downloadName(), outputs, entryNames, job.directory);
+            job.outputs = List.copyOf(outputs);
             job.status = "COMPLETE";
             LOGGER.info("Image job " + job.id + " (" + job.imageId + ") complete: " + total + " picture(s), "
                     + warnings.size() + " flagged, " + (stored ? "saved to cloud storage." : "not saved to cloud storage."));
@@ -307,13 +313,15 @@ public class ImageJobService {
                     ? " edited onto a clean white studio background."
                     : " edited into your background scene.")
                     + " AI editing can alter small details, so compare them with the originals before listing.";
-            if (stored) {
+            if (stored && !job.savedId.equals(job.imageId)) {
+                message += " Added to the saved set for item " + job.objectId + " (" + job.savedId + ").";
+            } else if (stored) {
                 message += " Saved as " + job.imageId + ".";
             }
             if (!warnings.isEmpty()) {
                 message += " Please review the flagged pictures before listing.";
             }
-            emit(events, "COMPLETE", message, job.id, job.imageId, total, List.copyOf(warnings),
+            emit(events, "COMPLETE", message, job.id, job.savedId, total, List.copyOf(warnings),
                     "/api/images/jobs/" + job.id + "/download", job.downloadName() + ".zip", List.copyOf(previewUrls), stored);
         } catch (IOException exception) {
             job.status = "FAILED";
@@ -577,6 +585,9 @@ public class ImageJobService {
         private volatile Path zipPath;
         private volatile List<Path> outputs = List.of();
         private volatile String objectId = "";
+        /** The saved set the pictures went into: this job's own id, or an earlier set with the same item code. */
+        private volatile String savedId;
+        private volatile int firstNumber = 1;
         private volatile String status = "ANALYZING";
         private volatile boolean centralObjectUnclear;
         private volatile List<String> waitingWarnings = List.of();
@@ -592,6 +603,7 @@ public class ImageJobService {
             this.directory = directory;
             this.images = images;
             this.backgroundPath = backgroundPath;
+            this.savedId = imageId;
         }
     }
 

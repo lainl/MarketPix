@@ -121,6 +121,33 @@ class ImageRecordServiceTests {
         verify(r2, never()).delete("202020102026A0002/record.json");
     }
 
+    @Test
+    void addsPicturesToTheSetThatAlreadyHasTheItemCode(@org.junit.jupiter.api.io.TempDir java.nio.file.Path folder)
+            throws Exception {
+        R2Client r2 = mock(R2Client.class);
+        when(r2.isConfigured()).thenReturn(true);
+        when(r2.listFolders()).thenReturn(List.of("101010102026A0001"));
+        byte[] existing = ("{\"id\":\"101010102026A0001\",\"createdAt\":\"2026-10-30T18:04:00Z\",\"tags\":[\"Clock\"],"
+                + "\"objectId\":\"410\",\"images\":[\"101010102026A0001/101010102026A0001_01.jpg\"]}")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        when(r2.get("101010102026A0001/record.json")).thenReturn(Optional.of(existing));
+        java.nio.file.Path jpeg = java.nio.file.Files.write(folder.resolve("new.jpg"), new byte[] {1, 2, 3});
+        ImageRecordService service = new ImageRecordService(r2, null, new ObjectMapper(), "", "UTC");
+
+        ImageRecordService.StoredSet set = service.store("202020102026A0002", List.of(jpeg, jpeg), " 410 ");
+
+        assertEquals(new ImageRecordService.StoredSet("101010102026A0001", 2), set);
+        verify(r2).put(org.mockito.ArgumentMatchers.eq("101010102026A0001/101010102026A0001_02.jpg"),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("image/jpeg"));
+        verify(r2).put(org.mockito.ArgumentMatchers.eq("101010102026A0001/101010102026A0001_03.jpg"),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("image/jpeg"));
+        verify(r2, never()).put(org.mockito.ArgumentMatchers.eq("202020102026A0002/record.json"),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        ImageRecordService.GalleryItem merged = service.find("101010102026A0001").orElseThrow();
+        assertEquals(3, merged.imageCount());
+        assertEquals(List.of("Clock"), merged.tags());
+    }
+
     private static byte[] record(String id, Instant createdAt) {
         return ("{\"id\":\"" + id + "\",\"createdAt\":\"" + createdAt + "\",\"tags\":[],\"images\":[\"" + id + "/" + id
                 + "_01.jpg\"]}").getBytes(java.nio.charset.StandardCharsets.UTF_8);
